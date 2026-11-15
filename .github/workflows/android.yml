@@ -68,7 +68,7 @@ jobs:
       # -Pbitchord.bundleWear=false: no empaqueta la app de Wear OS dentro del
       # APK (es más rápido y no la necesitamos por ahora).
       - name: Build release APK
-        run: ./gradlew assembleProdRelease -Pbitchord.bundleWear=false --stacktrace
+        run: ./gradlew -Pbitchord.bundleWear=false :app:assembleProdRelease --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

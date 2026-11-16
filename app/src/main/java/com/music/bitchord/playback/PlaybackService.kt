@@ -100,6 +100,7 @@ import com.music.bitchord.data.listentogether.partyQueueIndexOf
 import com.music.bitchord.data.listentogether.partyUpcomingAfter
 import com.music.bitchord.R
 import com.music.bitchord.data.LocalMediaRepository
+import com.music.bitchord.data.LocalLikes
 import com.music.bitchord.data.OfflinePlaylists
 import com.music.bitchord.data.innertube.InnertubeParser
 import com.music.bitchord.data.YtMusicRepository
@@ -2038,8 +2039,7 @@ class PlaybackService : MediaLibraryService() {
      * against, unless it is a local file or a download, which is liked into the
      * device's own Liked playlist instead (see [OfflinePlaylists]).
      */
-    private fun canLike(item: MediaItem?): Boolean =
-        item != null && (item.toSong().localUri != null || SignedIn.state(this).value)
+    private fun canLike(item: MediaItem?): Boolean = item != null
 
     /** Whether [item] is liked, by whichever of the two records owns it. */
     private fun isLiked(item: MediaItem?): Boolean {
@@ -2047,7 +2047,8 @@ class PlaybackService : MediaLibraryService() {
         return if (song.localUri != null) {
             OfflinePlaylists.isLiked(song)
         } else {
-            LikeState.overrides.value[song.videoId] == LikeStatus.LIKE
+            LikeState.overrides.value[song.videoId] == LikeStatus.LIKE ||
+                LocalLikes.isLiked(song.videoId)
         }
     }
 
@@ -3423,6 +3424,16 @@ class PlaybackService : MediaLibraryService() {
 
     private fun toggleFavoriteFromNotification(videoId: String) {
         favoriteActionJob?.cancel()
+        // With no account a like still lands — in the device's own store, the
+        // same place the player screen's heart puts it. No YouTube call is
+        // even attempted: the rating is final, not pending.
+        val song = session.player.currentMediaItem?.toSong()
+        if (song != null && song.localUri == null && !SignedIn.state(this).value) {
+            val nowLiked = LocalLikes.toggleLike(song)
+            LikeState.set(videoId, if (nowLiked) LikeStatus.LIKE else LikeStatus.INDIFFERENT)
+            refreshCustomLayouts()
+            return
+        }
         val previous = LikeState.overrides.value[videoId] ?: LikeStatus.INDIFFERENT
         val target = if (previous == LikeStatus.LIKE) {
             LikeStatus.INDIFFERENT

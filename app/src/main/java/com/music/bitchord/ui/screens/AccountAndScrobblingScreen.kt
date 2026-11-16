@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
 import com.music.bitchord.data.model.Account
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.icons.SfIcons
 import kotlin.math.roundToInt
 
 @Composable
@@ -47,6 +48,7 @@ fun AccountAndScrobblingScreen(
     onOpenLastfmLogin: () -> Unit,
     onOpenDiscord: () -> Unit,
     onOpenSpotify: () -> Unit,
+    onOpenMercuryAccount: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -66,6 +68,7 @@ fun AccountAndScrobblingScreen(
     val discordUsername by AppSettings.discordUsername.collectAsStateWithLifecycle()
     val discordRpcEnabled by AppSettings.discordRpcEnabled.collectAsStateWithLifecycle()
     val spotifyConnected by AppSettings.spotifySpdcToken.collectAsStateWithLifecycle()
+    val mercuryEmail by com.music.bitchord.data.cloud.CloudSync.mercuryEmail.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -74,6 +77,22 @@ fun AccountAndScrobblingScreen(
             .padding(contentPadding),
     ) {
         SettingsPageTitle(stringResource(R.string.account_integrations))
+
+        // First of the accounts: the app's own — an email, no Google involved —
+        // because it is the one that carries this device's likes, playlists and
+        // settings, and the one that works without any YouTube account.
+        SettingsGroup(
+            footer = stringResource(R.string.mercury_account_description),
+            topSpacing = 0.dp,
+        ) {
+            SettingsRow(
+                icon = SfIcons.Cloud,
+                title = stringResource(R.string.mercury_account),
+                subtitle = mercuryEmail?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.tap_to_connect),
+                onClick = onOpenMercuryAccount,
+            )
+        }
 
         // One card: who is signed in, which profile is listening, and the way
         // out, with the explanation of profiles underneath.

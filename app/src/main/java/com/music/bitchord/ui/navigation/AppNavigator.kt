@@ -18,6 +18,9 @@ import com.music.bitchord.ui.screens.SettingsChoiceKind
 sealed interface AppRoute {
     data object Settings : AppRoute
     data object AccountScrobbling : AppRoute
+
+    /** The Mercury account: the app's own email login on Supabase. */
+    data object MercuryAccount : AppRoute
     data object Sources : AppRoute
     data object ListenTogether : AppRoute
     data object WearOs : AppRoute

@@ -16,6 +16,8 @@ import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.playback.EqLayout
 import com.music.bitchord.playback.EqualizerPreset
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
 
 
 /**
@@ -937,6 +939,7 @@ object AppSettings {
             context,
             likedTitle = context.getString(com.music.bitchord.R.string.auto_liked),
         )
+        com.music.bitchord.data.LocalLikes.init(context)
         readAll()
         watchConnection(context)
     }
@@ -954,6 +957,70 @@ object AppSettings {
      */
     fun reload() {
         if (!this::prefs.isInitialized) return
+        readAll()
+    }
+
+    /**
+     * The settings that travel with a Mercury account: preferences a listener
+     * carries between devices. Never anything secret (tokens, credentials),
+     * never anything device-specific (paths, folders, permissions), never the
+     * account state of other services.
+     */
+    private val syncableSettingKeys = setOf(
+        "theme_mode", "app_font", "player_theme", "last_player_screen",
+        "autoplay", "crossfade_seconds", "smart_fade_enabled", "skip_silence",
+        "playback_speed", "shuffle_enabled", "repeat_mode",
+        "audio_quality_wifi", "audio_quality_cellular", "wifi_only_downloads",
+        "synced_lyrics", "lyrics_offset_ms", "translation_language", "lyrics_source_order",
+        "prioritize_syllable_sync", "reduce_dynamic_blur", "liquid_glass",
+        "progressive_blur", "glass_performance", "show_nerd_stats",
+        "hide_song_status", "swipe_to_play_next", "square_video_thumbnails",
+        "full_bleed_artwork", "animated_canvas", "local_music_sort",
+        "downloaded_music_sort", "library_sort", "pinned_playlists",
+        "hide_recents", "hide_home_videos", "hide_top_picks", "hide_home_moods",
+        "equalizer_enabled", "equalizer_mode", "equalizer_tone_x", "equalizer_tone_y",
+        "equalizer_bands", "loudness_normalization", "spatial_audio", "dolby_atmos",
+        "direct_source_stream", "filter_non_music_audio", "dont_repeat_suggestions",
+    )
+
+    /** The syncable settings as JSON, typed so the reader can write them back unchanged. */
+    fun exportSyncedSettings(): JSONObject {
+        val out = JSONObject()
+        if (!this::prefs.isInitialized) return out
+        prefs.all.filterKeys { it in syncableSettingKeys }.forEach { (key, value) ->
+            val tagged = when (value) {
+                is String -> JSONObject().put("t", "s").put("v", value)
+                is Boolean -> JSONObject().put("t", "b").put("v", value)
+                is Int -> JSONObject().put("t", "i").put("v", value.toLong())
+                is Long -> JSONObject().put("t", "l").put("v", value)
+                is Float -> JSONObject().put("t", "f").put("v", value.toDouble())
+                is Set<*> -> JSONObject().put("t", "ss").put("v", JSONArray(value))
+                else -> null
+            } ?: return@forEach
+            out.put(key, tagged)
+        }
+        return out
+    }
+
+    /** Writes imported settings through the same file, then re-reads the flows. */
+    fun importSyncedSettings(data: JSONObject) {
+        if (!this::prefs.isInitialized) return
+        val editor = prefs.edit()
+        data.keys().forEach { key ->
+            val tagged = data.optJSONObject(key) ?: return@forEach
+            when (tagged.optString("t")) {
+                "s" -> editor.putString(key, tagged.optString("v"))
+                "b" -> editor.putBoolean(key, tagged.optBoolean("v"))
+                "i" -> editor.putInt(key, tagged.optLong("v").toInt())
+                "l" -> editor.putLong(key, tagged.optLong("v"))
+                "f" -> editor.putFloat(key, tagged.optDouble("v").toFloat())
+                "ss" -> {
+                    val values = tagged.optJSONArray("v") ?: return@forEach
+                    editor.putStringSet(key, (0 until values.length()).map { values.getString(it) }.toSet())
+                }
+            }
+        }
+        editor.apply()
         readAll()
     }
 

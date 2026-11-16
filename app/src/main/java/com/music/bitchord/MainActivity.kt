@@ -171,6 +171,7 @@ import com.music.bitchord.ui.screens.SettingsChoicePage
 import com.music.bitchord.ui.components.SpotifyImportAlert
 import com.music.bitchord.ui.screens.WearOsScreen
 import com.music.bitchord.ui.screens.AccountAndScrobblingScreen
+import com.music.bitchord.ui.screens.MercuryAccountScreen
 import com.music.bitchord.ui.screens.DiscordDialog
 import com.music.bitchord.ui.screens.DiscordDialogHost
 import com.music.bitchord.ui.screens.DiscordScreen
@@ -960,7 +961,7 @@ private fun BitChordApp(
         }
     }
     val toggleLikeOf: (Song) -> Unit = { song ->
-        if (song.localUri != null) OfflinePlaylists.toggleLike(song) else viewModel.toggleLike(song.videoId)
+        if (song.localUri != null) OfflinePlaylists.toggleLike(song) else viewModel.toggleLike(song.videoId, song)
     }
     // Which tracks are being held on YouTube's own upload, so the player's menu
     // offers the way back out of a revert rather than the revert again.
@@ -994,6 +995,23 @@ private fun BitChordApp(
     // Playlists imported without (or instead of) a YouTube Music account live
     // in the app's own store, and sit on the same shelf as the downloaded ones.
     val localPlaylists by com.music.bitchord.data.spotify.LocalPlaylistStore.playlists.collectAsStateWithLifecycle()
+    // The device's own likes — the ones a heart tap lands in when nobody is
+    // signed in — are a Library card of their own, kept current from the store
+    // so a like made in the player puts the card on the page at once.
+    val localLikeSongs by com.music.bitchord.data.LocalLikes.songs.collectAsStateWithLifecycle()
+    val localLikesTitle = stringResource(R.string.local_likes_title)
+    val localLikesCountFormat = stringResource(R.string.local_likes_subtitle)
+    val localLikesItem = remember(localLikeSongs, localLikesTitle, localLikesCountFormat) {
+        localLikeSongs.takeIf { it.isNotEmpty() }?.let { songs ->
+            ShelfItem(
+                title = localLikesTitle,
+                subtitle = localLikesCountFormat.format(songs.size),
+                thumbnailUrl = songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl,
+                videoId = null,
+                browseId = com.music.bitchord.data.LocalLikes.BROWSE_ID,
+            )
+        }
+    }
     val localPlaylistItems = localPlaylists.map { playlist ->
         ShelfItem(
             title = playlist.title,
@@ -1030,9 +1048,13 @@ private fun BitChordApp(
     // An offline playlist's page is the store's, and follows it: a track
     // removed from its menu, or a like from the player, leaves no stale row.
     // Apart from the effect above so a like never re-lists the Downloads folder.
-    LaunchedEffect(topDetail?.browseId, offlinePlaylists) {
+    // The device's likes page follows its own store the same way.
+    LaunchedEffect(topDetail?.browseId, offlinePlaylists, localLikeSongs) {
         val openPage = topDetail ?: return@LaunchedEffect
-        if (openPage.songs !is UiState.Loading && OfflinePlaylists.isOfflinePlaylist(openPage.browseId)) {
+        if (openPage.songs !is UiState.Loading &&
+            (OfflinePlaylists.isOfflinePlaylist(openPage.browseId) ||
+                openPage.browseId == com.music.bitchord.data.LocalLikes.BROWSE_ID)
+        ) {
             viewModel.reloadLocalDetail(openPage.browseId)
         }
     }
@@ -3013,8 +3035,11 @@ private fun BitChordApp(
                                 onOpenLastfmLogin = { showLastfmLogin = true },
                                 onOpenDiscord = { navigator.push(AppRoute.Discord) },
                                 onOpenSpotify = { navigator.push(AppRoute.Spotify) },
+                                onOpenMercuryAccount = { navigator.push(AppRoute.MercuryAccount) },
                                 contentPadding = listPadding,
                             )
+                        } else if (pageRoute == AppRoute.MercuryAccount) {
+                            MercuryAccountScreen(onNavigateUp = { navigator.pop() })
                         } else if (pageRoute == AppRoute.Sources) {
                             SourcesScreen(
                                 contentPadding = listPadding,
@@ -3652,7 +3677,8 @@ private fun BitChordApp(
                                 pullState = libraryPull,
                                 contentPadding = listPadding,
                                 links = libraryLinks(),
-                                deviceItems = libraryDeviceItems(downloadedReleases) + localPlaylistItems,
+                                deviceItems = (localLikesItem?.let { listOf(it) }.orEmpty()) +
+                                    libraryDeviceItems(downloadedReleases) + localPlaylistItems,
                             )
                         }
                     }
@@ -3750,6 +3776,7 @@ private fun BitChordApp(
                         is AppRoute.ArtistShelf -> route.shelf.title
                         AppRoute.Moods -> stringResource(R.string.find_your_mood)
                         AppRoute.AccountScrobbling -> stringResource(R.string.account_scrobbling)
+                        AppRoute.MercuryAccount -> stringResource(R.string.mercury_account)
                         AppRoute.Sources -> stringResource(R.string.sources)
                         AppRoute.ListenTogether -> stringResource(R.string.listen_together)
                         AppRoute.WearOs -> stringResource(R.string.wear_os_page_title)
@@ -5249,7 +5276,6 @@ private fun BitChordApp(
             ) { it },
         ) {
             OnboardingScreen(
-                signedIn = signedIn,
                 initialName = remember {
                     ListenTogether.nickname().ifBlank { account?.name.orEmpty() }
                 },
@@ -5257,7 +5283,6 @@ private fun BitChordApp(
                     ListenTogether.setNickname(name)
                     com.music.bitchord.data.cloud.CloudSync.saveName(name)
                 },
-                onSignIn = { webSession = WebSessionMode.SIGN_IN },
                 onFinish = AppSettings::setOnboardingComplete,
             )
         }

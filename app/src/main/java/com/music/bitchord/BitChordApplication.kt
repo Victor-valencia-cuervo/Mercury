@@ -18,6 +18,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import okhttp3.OkHttpClient
 import com.music.bitchord.auth.AuthStore
 import com.music.bitchord.data.DebugLog
+import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.lyrics.LyricsTranslation
 import androidx.appcompat.app.AppCompatDelegate
 import com.music.bitchord.ui.player.AndroidPlayerHost
@@ -142,6 +143,10 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
             CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
         }
         AppSettings.init(this, authStore)
+        // The device's own likes go into the shared rating map, so the player,
+        // the notification and a queue loaded before the UI ever draws agree
+        // that a locally liked track is liked.
+        LikeState.seedLiked(com.music.bitchord.data.LocalLikes.ids.value)
         // Restores the addon token, so the first search after a process restart
         // doesn't have to attest the device again.
         com.music.bitchord.data.sources.addon.AddonAuth.init(this)
@@ -153,8 +158,9 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // and the clock offset are not restored — both are re-established on
         // the next connect, which is the only way to be sure they are current.
         ListenTogether.init(this)
-        // Mercurio's backend: profile and history mirror. Async, never blocks startup.
-        com.music.bitchord.data.cloud.CloudSync.start()
+        // Mercurio's backend: profile, history and (with a Mercury account) the
+        // whole sync. Async, never blocks startup.
+        com.music.bitchord.data.cloud.CloudSync.start(this)
         SearchHistory.init(this)
         LastPlayed.init(this)
         BoundedContextPersistence.init(this)

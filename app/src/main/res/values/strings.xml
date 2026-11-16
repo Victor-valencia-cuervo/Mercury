@@ -1262,6 +1262,33 @@
     <string name="no_local_folders">No folders with music in them</string>
     <string name="offline_playlist_empty">Nothing in this playlist yet. Add songs to it from their menu.</string>
     <string name="offline_liked_empty">Songs you like on this device show up here</string>
+    <!-- The device\'s own likes: kept with no account, and uploaded on sign-in. -->
+    <string name="local_likes_title">Liked on this device</string>
+    <string name="local_likes_subtitle">%1$d songs · Kept on this device</string>
+    <string name="local_likes_empty">Songs you like without signing in show up here — they\'re uploaded once you do</string>
+    <!-- The Mercury account: the app\'s own email login on Supabase. -->
+    <string name="mercury_account">Mercury account</string>
+    <string name="mercury_account_description">An email and a password on the app\'s own backend. It keeps your likes, playlists and settings in the cloud, and hands them to any device you sign in on.</string>
+    <string name="mercury_email">Email</string>
+    <string name="mercury_password">Password</string>
+    <string name="mercury_repeat_password">Repeat password</string>
+    <string name="mercury_passwords_differ">The passwords don\'t match</string>
+    <string name="mercury_sign_in">Sign in</string>
+    <string name="mercury_create_account">Create account</string>
+    <string name="mercury_sign_in_hint">Use this when you already have a Mercury account.</string>
+    <string name="mercury_create_hint">Your likes, playlists and settings from this device are uploaded right after.</string>
+    <string name="mercury_signed_in_as">Signed in with this email</string>
+    <string name="mercury_sync_hint">Your likes, playlists and settings stay in sync while this account is on. Liked songs you saved without signing in were uploaded when the account was created.</string>
+    <string name="mercury_sign_out">Sign out of Mercury account</string>
+    <string name="mercury_forgot_password">Forgot password?</string>
+    <string name="mercury_reset_sent">If that email has an account, a recovery email was sent to it</string>
+    <string name="mercury_not_configured">The app\'s backend isn\'t configured in this build.</string>
+    <string name="mercury_error_email">Enter a valid email</string>
+    <string name="mercury_error_password">The password needs at least 6 characters</string>
+    <string name="mercury_error_sign_in">Wrong email or password</string>
+    <string name="mercury_error_exists">That email already has an account — sign in instead</string>
+    <string name="mercury_error_not_confirmed">The backend requires email confirmation — turn off \"Confirm email\" in the Supabase dashboard</string>
+    <string name="mercury_error_generic">Something went wrong — check your connection and try again</string>
     <string name="saved_on_this_device">Saved on this device</string>
     <string name="spotify_import_empty_playlist">No songs in this playlist</string>
     <string name="spotify_import_language_preference" translatable="false">Language preference</string>

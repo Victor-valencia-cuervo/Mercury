@@ -63,8 +63,8 @@ object LocalPlaylistStore {
         }
     }
 
-    fun savePlaylist(title: String, songs: List<Song>): LocalPlaylist {
-        val id = "sp_local_" + System.currentTimeMillis()
+    /** Saves [songs] under [title]; [id], when given, keeps the cloud copy mapped to this one. */
+    fun savePlaylist(title: String, songs: List<Song>, id: String = "sp_local_" + System.currentTimeMillis()): LocalPlaylist {
         val playlist = LocalPlaylist(id = id, title = title, songs = songs)
         val updated = listOf(playlist) + _playlists.value.filterNot { it.id == id }
         _playlists.value = updated

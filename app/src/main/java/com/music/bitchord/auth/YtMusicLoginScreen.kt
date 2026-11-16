@@ -99,6 +99,11 @@ fun YtMusicLoginScreen(
                 }
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                // Google's sign-in refuses an embedded WebView outright — the
+                // "; wv" in the stock user agent is what it reads as an
+                // automation — so the same cosmetic strip Spotify and Discord
+                // sign-in already applies goes on here too.
+                settings.userAgentString = browserUserAgent(settings.userAgentString)
                 configureWebView(this)
 
                 webViewClient = object : WebViewClient() {

@@ -210,30 +210,28 @@ fun SongActionsMenu(
 
         // Leads with the actions it is opened for most, as tiles: the rating
         // — kept up after a tap, so the new state shows in place — and Share.
-        if (canRate || shareAction != null) {
-            if (startsGroup()) IosMenuSeparator()
-            IosMenuQuickActions {
-                if (canRate) {
-                    IosMenuQuickAction(
-                        icon = if (liked) SfIcons.StarFill else SfIcons.Star,
-                        label = stringResource(R.string.like),
-                        tint = if (liked) palette.accent else null,
-                        onClick = onToggleLike,
-                    )
-                }
-                // No dislike for a device file: there is no recommendation
-                // feed on the device for one to steer.
-                if (signedIn && !isOffline) {
-                    IosMenuQuickAction(
-                        icon = if (disliked) BrokenHeart.Fill else BrokenHeart.Outline,
-                        label = stringResource(R.string.dislike),
-                        tint = if (disliked) palette.accent else null,
-                        onClick = onToggleDislike,
-                    )
-                }
-                shareAction?.let {
-                    IosMenuQuickAction(icon = SfIcons.Share, label = stringResource(R.string.share), onClick = it)
-                }
+        // The like is offered on every track: with no account it lands in the
+        // device's own likes, which is exactly what a guest expects it to do.
+        if (startsGroup()) IosMenuSeparator()
+        IosMenuQuickActions {
+            IosMenuQuickAction(
+                icon = if (liked) SfIcons.StarFill else SfIcons.Star,
+                label = stringResource(R.string.like),
+                tint = if (liked) palette.accent else null,
+                onClick = onToggleLike,
+            )
+            // No dislike for a device file: there is no recommendation
+            // feed on the device for one to steer.
+            if (signedIn && !isOffline) {
+                IosMenuQuickAction(
+                    icon = if (disliked) BrokenHeart.Fill else BrokenHeart.Outline,
+                    label = stringResource(R.string.dislike),
+                    tint = if (disliked) palette.accent else null,
+                    onClick = onToggleDislike,
+                )
+            }
+            shareAction?.let {
+                IosMenuQuickAction(icon = SfIcons.Share, label = stringResource(R.string.share), onClick = it)
             }
         }
 

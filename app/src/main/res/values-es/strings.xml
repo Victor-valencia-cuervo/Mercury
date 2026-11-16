@@ -1376,6 +1376,33 @@
     <string name="no_local_folders">No hay carpetas con música</string>
     <string name="offline_playlist_empty">Esta lista aún está vacía. Añade canciones desde su menú.</string>
     <string name="offline_liked_empty">Las canciones que te gusten en este dispositivo aparecerán aquí</string>
+    <!-- Los me gusta propios del dispositivo: se guardan sin cuenta y se suben al iniciar sesión. -->
+    <string name="local_likes_title">Me gusta en este dispositivo</string>
+    <string name="local_likes_subtitle">%1$d canciones · Guardadas en este dispositivo</string>
+    <string name="local_likes_empty">Las canciones que te gusten sin iniciar sesión aparecerán aquí — se suben cuando inicies sesión</string>
+    <!-- La cuenta Mercury: el login propio de la app (email) en Supabase. -->
+    <string name="mercury_account">Cuenta Mercury</string>
+    <string name="mercury_account_description">Un email y una contraseña en el backend propio de la app. Guarda tus me gusta, playlists y ajustes en la nube, y te los entrega en cualquier dispositivo donde inicies sesión.</string>
+    <string name="mercury_email">Correo electrónico</string>
+    <string name="mercury_password">Contraseña</string>
+    <string name="mercury_repeat_password">Repetir contraseña</string>
+    <string name="mercury_passwords_differ">Las contraseñas no coinciden</string>
+    <string name="mercury_sign_in">Iniciar sesión</string>
+    <string name="mercury_create_account">Crear cuenta</string>
+    <string name="mercury_sign_in_hint">Úsalo si ya tienes una cuenta Mercury.</string>
+    <string name="mercury_create_hint">Tus me gusta, playlists y ajustes de este dispositivo se suben justo después.</string>
+    <string name="mercury_signed_in_as">Sesión iniciada con este correo</string>
+    <string name="mercury_sync_hint">Tus me gusta, playlists y ajustes se mantienen sincronizados con esta cuenta. Las canciones que guardaste sin iniciar sesión se subieron al crear la cuenta.</string>
+    <string name="mercury_sign_out">Cerrar sesión de Mercury</string>
+    <string name="mercury_forgot_password">¿Olvidaste la contraseña?</string>
+    <string name="mercury_reset_sent">Si ese correo tiene una cuenta, se le envió un email de recuperación</string>
+    <string name="mercury_not_configured">El backend de la app no está configurado en esta build.</string>
+    <string name="mercury_error_email">Escribe un correo válido</string>
+    <string name="mercury_error_password">La contraseña necesita al menos 6 caracteres</string>
+    <string name="mercury_error_sign_in">Correo o contraseña incorrectos</string>
+    <string name="mercury_error_exists">Ese correo ya tiene una cuenta — inicia sesión</string>
+    <string name="mercury_error_not_confirmed">El backend pide confirmación de email — desactiva \"Confirm email\" en el panel de Supabase</string>
+    <string name="mercury_error_generic">Algo salió mal — revisa tu conexión e intenta de nuevo</string>
     <string name="saved_on_this_device">Guardada en este dispositivo</string>
     <string name="direct_source_stream_in_party">Desactivado mientras estás en una fiesta de Listen Together</string>
     <string name="direct_source_stream">Transmisión directa desde la fuente</string>

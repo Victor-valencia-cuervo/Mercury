@@ -12,6 +12,7 @@ import com.music.bitchord.auth.profileId
 import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.LocalMediaRepository
+import com.music.bitchord.data.LocalLikes
 import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.TopPicks
@@ -674,13 +675,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * them ([likeStatuses]) means a tap shows immediately without the library
      * having to be re-fetched, and a later refresh can't undo it.
      */
-    /** Every rating known for this account: the library's, then this session's. */
+    /** Every rating known: the library's, this session's, and the device's own likes. */
     val likeStatuses: StateFlow<Map<String, LikeStatus>> =
-        combine(_library, LikeState.overrides) { library, overrides ->
+        combine(_library, LikeState.overrides, LocalLikes.ids) { library, overrides, localIds ->
             val liked = (library as? UiState.Success)?.data?.likedSongs
                 ?.associate { it.videoId to LikeStatus.LIKE }
                 .orEmpty()
-            liked + overrides
+            val local = localIds.associateWith { LikeStatus.LIKE }
+            (liked + local) + overrides
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     fun likeStatusOf(videoId: String): LikeStatus =
@@ -694,11 +696,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * on a round trip before the heart fills reads as the tap not having
      * registered, and people tap again.
      */
-    fun setLike(videoId: String, status: LikeStatus) {
-        if (!requireSignIn()) return
+    fun setLike(videoId: String, status: LikeStatus, song: Song? = null) {
+        // A dislike steers YouTube's own recommendations, so it still needs the
+        // account; a like has this device's store to land in and needs none.
+        if (!_signedIn.value && status == LikeStatus.DISLIKE) return
         val previous = likeStatusOf(videoId)
         if (previous == status) return
+        val localSong = LocalLikes.songs.value.firstOrNull { it.videoId == videoId }
         LikeState.set(videoId, status)
+        when (status) {
+            LikeStatus.LIKE -> song?.let { LocalLikes.toggleLike(it) }
+            else -> LocalLikes.remove(videoId)
+        }
+        if (!_signedIn.value) return
         viewModelScope.launch {
             YtMusicRepository.rate(videoId, status).fold(
                 onSuccess = {
@@ -710,9 +720,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val unliked = previous == LikeStatus.LIKE &&
                         status == LikeStatus.INDIFFERENT
                     if (unliked) forgetFromLibrary(videoId)
+                    if (status == LikeStatus.LIKE) LocalLikes.markPushed(videoId)
                 },
                 onFailure = {
                     LikeState.set(videoId, previous)
+                    when (previous) {
+                        LikeStatus.LIKE -> (song ?: localSong)?.let { LocalLikes.toggleLike(it) }
+                        else -> LocalLikes.remove(videoId)
+                    }
                 },
             )
         }
@@ -775,9 +790,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The heart: liked becomes neutral, anything else becomes liked. */
-    fun toggleLike(videoId: String) = setLike(
+    fun toggleLike(videoId: String, song: Song? = null) = setLike(
         videoId,
         if (likeStatusOf(videoId) == LikeStatus.LIKE) LikeStatus.INDIFFERENT else LikeStatus.LIKE,
+        song,
     )
 
     /** As [toggleLike], for the thumb-down. */
@@ -3011,6 +3027,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         com.music.bitchord.data.spotify.LocalPlaylistStore.getPlaylist(browseId)?.let { playlist ->
             return nonEmpty(playlist.songs) { text(R.string.spotify_import_empty_playlist) }
         }
+        if (browseId == LocalLikes.BROWSE_ID) {
+            return nonEmpty(LocalLikes.songs.value) { text(R.string.local_likes_empty) }
+        }
         remoteLibrary(browseId)?.let { return remoteSongsState(it) }
         LocalGroups.folderOf(browseId)?.let { folderId ->
             // Read off a fresh listing of the folder it came from: a grouping
@@ -3414,6 +3433,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _account.value = account
             _channels.value = emptyList()
             _signedIn.value = true
+            pushLocalLikes()
 
             // Every resolver verdict and personalised page belongs to the
             // identity that was active before validation succeeded.
@@ -3431,6 +3451,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val profile = account?.profiles?.firstOrNull { it.profileId == selectedProfileId }
         Innertube.cookie = account?.cookie
         Innertube.selectChannel(profile?.pageId, profile?.dataSyncId, profile?.authUser)
+    }
+
+    /**
+     * Delivers to YouTube the likes this device collected while nobody was
+     * signed in — the heart the user tapped on a song they never want to lose
+     * sight of again should mean the same thing the moment an account arrives.
+     *
+     * One at a time with a beat between them: a burst of ratings is what
+     * YouTube answers with a rate limit, and a like refused here stays
+     * unconfirmed in [LocalLikes] to be tried again the next time someone
+     * signs in rather than being lost.
+     */
+    private fun pushLocalLikes() {
+        val pending = LocalLikes.pendingSongs()
+        if (pending.isEmpty()) return
+        viewModelScope.launch {
+            pending.forEach { like ->
+                YtMusicRepository.rate(like.videoId, LikeStatus.LIKE)
+                    .onSuccess { LocalLikes.markPushed(like.videoId) }
+                delay(400L)
+            }
+            libraryStale = true
+        }
     }
 
     /** Selects an identity without ever allowing a response to replace it. */
@@ -3534,6 +3577,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _account.value = null
         likedSyncJob?.cancel()
         LikeState.clear()
+        // The device's own likes survive every account: their hearts stay filled.
+        LikeState.seedLiked(LocalLikes.ids.value)
         _playlistsLoading.value = false
         _playlists.value = emptyList()
         _playlistOwned.value = emptyMap()
@@ -3595,9 +3640,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _activeProfileId.value = null
         _library.value = UiState.Loading
         // Ratings and playlists belong to the account that just left; keeping
-        // them would show the next signed-in user someone else's hearts.
+        // them would show the next signed-in user someone else's hearts. The
+        // device's own likes come straight back — they were never the account's.
         likedSyncJob?.cancel()
         LikeState.clear()
+        LikeState.seedLiked(LocalLikes.ids.value)
         _playlists.value = emptyList()
         _playlistOwned.value = emptyMap()
         ownershipInFlight.clear()

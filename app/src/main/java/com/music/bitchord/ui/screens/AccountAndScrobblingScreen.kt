@@ -33,7 +33,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
 import com.music.bitchord.data.model.Account
 import com.music.bitchord.data.settings.AppSettings
-import com.music.bitchord.ui.icons.SfIcons
 import kotlin.math.roundToInt
 
 @Composable

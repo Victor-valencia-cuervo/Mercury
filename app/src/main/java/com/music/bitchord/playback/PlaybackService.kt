@@ -3427,7 +3427,7 @@ class PlaybackService : MediaLibraryService() {
         // With no account a like still lands — in the device's own store, the
         // same place the player screen's heart puts it. No YouTube call is
         // even attempted: the rating is final, not pending.
-        val song = session.player.currentMediaItem?.toSong()
+        val song = player?.currentMediaItem?.toSong()
         if (song != null && song.localUri == null && !SignedIn.state(this).value) {
             val nowLiked = LocalLikes.toggleLike(song)
             LikeState.set(videoId, if (nowLiked) LikeStatus.LIKE else LikeStatus.INDIFFERENT)

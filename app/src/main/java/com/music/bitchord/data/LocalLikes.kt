@@ -43,6 +43,7 @@ object LocalLikes {
     private val lock = Any()
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    private val _all = MutableStateFlow<List<LocalLike>>(emptyList())
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
 
     /** The liked tracks, newest like first. */
@@ -56,10 +57,10 @@ object LocalLikes {
     fun init(context: Context) {
         if (this::prefs.isInitialized) return
         prefs = context.applicationContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        publish(load())
-        val loaded = _songs.value
+        val loaded = load()
+        publish(loaded)
         io.launch {
-            songs.filter { it !== loaded }.conflate().collect { persist(it) }
+            _all.filter { it !== loaded }.conflate().collect { persist(it) }
         }
     }
 
@@ -72,9 +73,9 @@ object LocalLikes {
         mutate { list ->
             nowLiked = key !in _ids.value
             if (nowLiked) {
-                listOf(song.asLocalLike(pushed = false)) + list.filterNot { it.videoId == key }
+                listOf(song.asLocalLike(pushed = false)) + list.filterNot { it.song.videoId == key }
             } else {
-                list.filterNot { it.videoId == key }
+                list.filterNot { it.song.videoId == key }
             }
         }
         return nowLiked
@@ -88,24 +89,25 @@ object LocalLikes {
 
     fun remove(videoId: String) {
         if (videoId !in _ids.value) return
-        mutate { list -> list.filterNot { it.videoId == videoId } }
+        mutate { list -> list.filterNot { it.song.videoId == videoId } }
     }
 
     /** The likes whose rating no account has confirmed yet — the sign-in push works off this. */
-    fun pendingSongs(): List<Song> = _songs.value.filter { !it.pushed }
+    fun pendingSongs(): List<Song> = _all.value.filter { !it.pushed }.map { it.song }
 
     /** Marks a song's like as delivered, so the next push doesn't send it again. */
     fun markPushed(videoId: String) {
-        mutate { list -> list.map { if (it.videoId == videoId) it.copy(pushed = true) else it } }
+        mutate { list -> list.map { if (it.song.videoId == videoId) it.copy(pushed = true) else it } }
     }
 
     private inline fun mutate(change: (List<LocalLike>) -> List<LocalLike>) {
-        synchronized(lock) { publish(change(_songs.value)) }
+        synchronized(lock) { publish(change(_all.value)) }
     }
 
     private fun publish(list: List<LocalLike>) {
-        _songs.value = list
-        _ids.value = list.mapTo(HashSet()) { it.videoId }
+        _all.value = list
+        _songs.value = list.map { it.song }
+        _ids.value = list.mapTo(HashSet()) { it.song.videoId }
     }
 
     private fun load(): List<LocalLike> {

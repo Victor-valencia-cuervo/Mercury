@@ -114,7 +114,11 @@ object CloudSync {
         val auth = SupabaseProvider.client.auth
         auth.awaitInitialization()
         val current = auth.currentUserOrNull()
-        if (current != null && current.isAnonymous == true) {
+        // An anonymous install user carries no email — that is what makes it
+        // anonymous — so giving it one is the upgrade in place. A session that
+        // already has an email signs up fresh, which is what a first-time
+        // account is anyway.
+        if (current != null && current.email.isNullOrBlank()) {
             auth.updateUser(updateCurrentUser = true) {
                 this.email = email
                 this.password = password
@@ -261,8 +265,7 @@ object CloudSync {
                         thumbnailUrl = it.thumbnailUrl,
                     )
                 },
-                onConflict = "user_id,video_id",
-            )
+            ) { onConflict = "user_id,video_id" }
             local.forEach { com.music.bitchord.data.LocalLikes.markPushed(it.videoId) }
         }
         val remote = runCatching {
@@ -283,7 +286,8 @@ object CloudSync {
         val local = com.music.bitchord.data.spotify.LocalPlaylistStore.playlists.value
         local.forEach { playlist ->
             val row = client.from("playlists")
-                .upsert(PlaylistRow(userId = uid, externalId = playlist.id, name = playlist.title), onConflict = "user_id,external_id") {
+                .upsert(PlaylistRow(userId = uid, externalId = playlist.id, name = playlist.title)) {
+                    onConflict = "user_id,external_id"
                     select()
                 }
                 .decodeSingleOrNull<PlaylistRow>() ?: return@forEach
@@ -300,8 +304,7 @@ object CloudSync {
                             thumbnailUrl = song.thumbnailUrl,
                         )
                     },
-                    onConflict = "playlist_id,video_id",
-                )
+                ) { onConflict = "playlist_id,video_id" }
             }
         }
         val remote = runCatching {
@@ -386,8 +389,7 @@ object CloudSync {
         }.getOrNull() as? kotlinx.serialization.json.JsonObject ?: return
         SupabaseProvider.client.from("settings").upsert(
             SettingsWrite(userId = uid, data = json),
-            onConflict = "user_id",
-        )
+        ) { onConflict = "user_id" }
     }
 
     private fun setSettingsMarker(at: String? = java.time.Instant.now().toString()) {

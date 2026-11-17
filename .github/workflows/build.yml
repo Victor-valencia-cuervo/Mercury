@@ -33,5 +33,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Mercury-debug-apk
-          path: app/build/outputs/apk/prodDebug/*.apk
+          path: app/build/outputs/apk/prod/debug/*.apk
           if-no-files-found: error

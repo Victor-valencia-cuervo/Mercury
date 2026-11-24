@@ -3376,8 +3376,6 @@ private fun BitChordApp(
                                 greetingName = ListenTogether.nickname()
                                     .ifBlank { account?.name.orEmpty() }
                                     .ifBlank { null },
-                                signedIn = signedIn,
-                                onSignIn = { webSession = WebSessionMode.SIGN_IN },
                                 onItemClick = { item, shelfTitle ->
                                     val song = shelfSong(item)
                                     // Hoisted because ShelfItem lives in :shared, and

@@ -367,8 +367,9 @@ internal fun shapesFor(style: ThemeStyle): Shapes = when (style) {
         extraLarge = RoundedCornerShape(12.dp),
     )
     ThemeStyle.WINDOWS95 -> Shapes(
-        extraSmall = RectangleShape, small = RectangleShape, medium = RectangleShape,
-        large = RectangleShape, extraLarge = RectangleShape,
+        extraSmall = RoundedCornerShape(0.dp), small = RoundedCornerShape(0.dp),
+        medium = RoundedCornerShape(0.dp), large = RoundedCornerShape(0.dp),
+        extraLarge = RoundedCornerShape(0.dp),
     )
     ThemeStyle.VAPORWAVE -> Shapes(
         extraSmall = RoundedCornerShape(10.dp), small = RoundedCornerShape(14.dp),

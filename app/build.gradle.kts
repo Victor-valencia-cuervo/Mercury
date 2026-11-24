@@ -86,6 +86,15 @@ val supabaseKey: String = (
 // See the root build.gradle.kts: one version for the phone and its watch app.
 val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
 
+/*
+ * Lite edition: `./gradlew -Pmercurio.lite=true :app:assembleProdRelease`.
+ * One ABI (arm64-v8a, every phone of the last several years), so the native
+ * libraries — ONNX Runtime among them — ship once instead of three times, and
+ * lighter defaults for blur and animation. Installs next to the full app
+ * (package `com.mercurio.app.lite`).
+ */
+val liteBuild = providers.gradleProperty("mercurio.lite").orNull == "true"
+
 android {
     namespace = "com.music.bitchord"
     // InnerTubeX's AAR requires compiling against 37; targetSdk (runtime behaviour) stays 36.
@@ -93,6 +102,8 @@ android {
 
     defaultConfig {
         applicationId = "com.mercurio.app"
+        if (liteBuild) applicationIdSuffix = ".lite"
+        buildConfigField("boolean", "LITE", liteBuild.toString())
         // 26 keeps reach wide; real-time blur (RenderEffect) kicks in on API 31+,
         // Haze falls back to a translucent scrim below that.
         minSdk = 26
@@ -129,8 +140,13 @@ android {
         abi {
             isEnable = true
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = true
+            if (liteBuild) {
+                include("arm64-v8a")
+                isUniversalApk = false
+            } else {
+                include("armeabi-v7a", "arm64-v8a", "x86_64")
+                isUniversalApk = true
+            }
         }
     }
 
@@ -353,6 +369,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // Lets the Google sign-in WebView stop announcing the app's package name in
+    // X-Requested-With, which is how Google recognises an embedded browser.
+    implementation("androidx.webkit:webkit:1.12.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // ---- Media playback: Media3 / ExoPlayer ----

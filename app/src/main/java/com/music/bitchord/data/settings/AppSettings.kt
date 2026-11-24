@@ -414,6 +414,24 @@ object AppSettings {
     val themeMode = MutableStateFlow(ThemeMode.DARK)
     val appFont = MutableStateFlow(AppFont.DEFAULT)
 
+    /** The app's skin (see [ThemeStyle]); light/dark is [themeMode]'s job. */
+    val themeStyle = MutableStateFlow(ThemeStyle.BITCHORD)
+
+    /** ARGB accent chosen by the user, or null for the style's own accent. */
+    val themeAccent = MutableStateFlow<Int?>(null)
+
+    /**
+     * Wallpaper: 0 means none, anything else is the time it was set, which only
+     * serves to tell the loader the file changed.
+     */
+    val wallpaperVersion = MutableStateFlow(0L)
+
+    /** How much of the theme's background colour is laid over the wallpaper, 0..0.95. */
+    val wallpaperDim = MutableStateFlow(0.35f)
+
+    /** How soft the wallpaper is, 0 (sharp) .. 1 (very soft). */
+    val wallpaperBlur = MutableStateFlow(0f)
+
     /** Keep playing similar music once the queue runs out. */
     val autoplay = MutableStateFlow(true)
 
@@ -1079,12 +1097,19 @@ object AppSettings {
         appFont.value = runCatching {
             AppFont.valueOf(prefs.getString(KEY_APP_FONT, null) ?: AppFont.DEFAULT.name)
         }.getOrDefault(AppFont.DEFAULT)
+        themeStyle.value = runCatching {
+            ThemeStyle.valueOf(prefs.getString(KEY_THEME_STYLE, null) ?: ThemeStyle.BITCHORD.name)
+        }.getOrDefault(ThemeStyle.BITCHORD)
+        themeAccent.value = if (prefs.contains(KEY_THEME_ACCENT)) prefs.getInt(KEY_THEME_ACCENT, 0) else null
+        wallpaperVersion.value = prefs.getLong(KEY_WALLPAPER_VERSION, 0L)
+        wallpaperDim.value = prefs.getFloat(KEY_WALLPAPER_DIM, 0.35f).coerceIn(0f, 0.95f)
+        wallpaperBlur.value = prefs.getFloat(KEY_WALLPAPER_BLUR, 0f).coerceIn(0f, 1f)
         autoplay.value = prefs.getBoolean(KEY_AUTOPLAY, true)
         shuffleEnabled.value = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)
         showNerdStats.value = prefs.getBoolean(KEY_NERD_STATS, false)
         showListenTogetherButton.value = prefs.getBoolean(KEY_LISTEN_TOGETHER_BUTTON, false)
-        reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, false)
+        reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, BuildConfig.LITE)
         onboardingComplete.value = prefs.getBoolean(KEY_ONBOARDING_COMPLETE, false)
         highPerformanceMode.value = prefs.getBoolean(KEY_HIGH_PERFORMANCE_MODE, false)
         performanceRefreshRate.value = normalizePerformanceRefreshRate(
@@ -1105,7 +1130,7 @@ object AppSettings {
         squareVideoThumbnails.value = prefs.getBoolean(KEY_SQUARE_VIDEO_THUMBNAILS, false)
         VideoThumbnails.square = squareVideoThumbnails.value
         smartVersionAlignment.value = prefs.getBoolean(KEY_SMART_VERSION_ALIGNMENT, true)
-        reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, false)
+        reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, BuildConfig.LITE)
         disableBlendEffects.value = prefs.getBoolean(KEY_DISABLE_BLEND_EFFECTS, false)
         liquidGlass.value = prefs.getBoolean(KEY_LIQUID_GLASS, false)
         glassPerformance.value = prefs.getBoolean(KEY_GLASS_PERFORMANCE, false)
@@ -1118,7 +1143,7 @@ object AppSettings {
             reduceAnimation.value = false
             reduceDynamicBlur.value = false
         }
-        animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, true)
+        animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, !BuildConfig.LITE)
         canvasOverCellular.value = prefs.getBoolean(KEY_CANVAS_OVER_CELLULAR, false)
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
@@ -1473,6 +1498,37 @@ object AppSettings {
     fun setAppFont(value: AppFont) {
         appFont.value = value
         prefs.edit().putString(KEY_APP_FONT, value.name).apply()
+    }
+
+    fun setThemeStyle(value: ThemeStyle) {
+        themeStyle.value = value
+        prefs.edit().putString(KEY_THEME_STYLE, value.name).apply()
+    }
+
+    /** [argb] null goes back to the style's own accent. */
+    fun setThemeAccent(argb: Int?) {
+        themeAccent.value = argb
+        val editor = prefs.edit()
+        if (argb == null) editor.remove(KEY_THEME_ACCENT) else editor.putInt(KEY_THEME_ACCENT, argb)
+        editor.apply()
+    }
+
+    /** A new wallpaper file is in place (or [version] 0: it was removed). */
+    fun setWallpaperVersion(version: Long) {
+        wallpaperVersion.value = version
+        prefs.edit().putLong(KEY_WALLPAPER_VERSION, version).apply()
+    }
+
+    fun setWallpaperDim(value: Float) {
+        val v = value.coerceIn(0f, 0.95f)
+        wallpaperDim.value = v
+        prefs.edit().putFloat(KEY_WALLPAPER_DIM, v).apply()
+    }
+
+    fun setWallpaperBlur(value: Float) {
+        val v = value.coerceIn(0f, 1f)
+        wallpaperBlur.value = v
+        prefs.edit().putFloat(KEY_WALLPAPER_BLUR, v).apply()
     }
 
     fun setReduceAnimation(value: Boolean) {
@@ -2338,6 +2394,11 @@ object AppSettings {
     private const val KEY_SPEED = "playback_speed"
     private const val KEY_THEME = "theme_mode"
     private const val KEY_APP_FONT = "app_font"
+    private const val KEY_THEME_STYLE = "theme_style"
+    private const val KEY_THEME_ACCENT = "theme_accent"
+    private const val KEY_WALLPAPER_VERSION = "wallpaper_version"
+    private const val KEY_WALLPAPER_DIM = "wallpaper_dim"
+    private const val KEY_WALLPAPER_BLUR = "wallpaper_blur"
     private const val KEY_AUTOPLAY = "autoplay"
     private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
     private const val KEY_REPEAT_MODE = "repeat_mode"

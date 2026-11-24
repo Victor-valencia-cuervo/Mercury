@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <string name="theme_style">Style</string>
+    <string name="theme_style_footer">Every style has a light and a dark version and follows the Theme setting above.</string>
+    <string name="theme_style_bitchord">BitChord</string>
+    <string name="theme_style_bitchord_subtitle">The original look</string>
+    <string name="theme_style_neobrutalism">Neobrutalism</string>
+    <string name="theme_style_neobrutalism_subtitle">Strong colours, thick borders, hard shadows and big bold type</string>
+    <string name="theme_style_windows95">Windows 95</string>
+    <string name="theme_style_windows95_subtitle">Bevelled grey panels, fixed-width type and square corners</string>
+    <string name="theme_style_vaporwave">Vaporwave</string>
+    <string name="theme_style_vaporwave_subtitle">Gradients, neon, a retro grid and sun</string>
+    <string name="theme_style_space">Space Computer</string>
+    <string name="theme_style_space_subtitle">Stars, a coordinate grid, terminal type and cut corners</string>
+    <string name="theme_accent">Accent colour</string>
+    <string name="wallpaper">Wallpaper</string>
+    <string name="wallpaper_none">None. Tap to choose a picture</string>
+    <string name="wallpaper_set">Tap to change the picture</string>
+    <string name="wallpaper_dim">Overlay</string>
+    <string name="wallpaper_dim_subtitle">Darkens the picture in dark mode and lightens it in light mode, so text stays readable</string>
+    <string name="wallpaper_blur">Blur</string>
+    <string name="wallpaper_remove">Remove wallpaper</string>
+    <string name="wallpaper_failed">That picture could not be used</string>
+</resources>

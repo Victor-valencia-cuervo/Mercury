@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="theme_style">Estilo</string>
+    <string name="theme_style_footer">Cada estilo tiene versión clara y oscura, y sigue el ajuste de Tema de arriba.</string>
+    <string name="theme_style_bitchord">BitChord</string>
+    <string name="theme_style_bitchord_subtitle">El aspecto original</string>
+    <string name="theme_style_neobrutalism">Neobrutalismo</string>
+    <string name="theme_style_neobrutalism_subtitle">Colores fuertes, bordes gruesos, sombras duras y tipografía grande</string>
+    <string name="theme_style_windows95">Windows 95</string>
+    <string name="theme_style_windows95_subtitle">Paneles grises con bisel, letra monoespaciada y esquinas rectas</string>
+    <string name="theme_style_vaporwave">Vaporwave</string>
+    <string name="theme_style_vaporwave_subtitle">Degradados, neón, rejilla y sol retro</string>
+    <string name="theme_style_space">Space Computer</string>
+    <string name="theme_style_space_subtitle">Estrellas, rejilla de coordenadas, letra de terminal y esquinas cortadas</string>
+    <string name="theme_accent">Color de acento</string>
+    <string name="wallpaper">Fondo de pantalla</string>
+    <string name="wallpaper_none">Ninguno. Toca para elegir una imagen</string>
+    <string name="wallpaper_set">Toca para cambiar la imagen</string>
+    <string name="wallpaper_dim">Capa sobre la imagen</string>
+    <string name="wallpaper_dim_subtitle">En modo oscuro oscurece la imagen y en modo claro la aclara, para que el texto se lea bien</string>
+    <string name="wallpaper_blur">Desenfoque</string>
+    <string name="wallpaper_remove">Quitar fondo de pantalla</string>
+    <string name="wallpaper_failed">No se pudo usar esa imagen</string>
+</resources>

@@ -7,6 +7,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
@@ -18,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
 import com.music.bitchord.data.settings.AppFont
+import com.music.bitchord.data.settings.ThemeStyle
 
 // Apple Music's signature red. No longer the primary accent, but kept for the
 // spots (Replay's rank badge) that want that specific red regardless of theme.
@@ -138,20 +141,88 @@ private fun Typography.withFamily(family: FontFamily) = Typography(
     labelSmall = labelSmall.copy(fontFamily = family),
 )
 
+/** Applies [f] to every style in the scale. */
+private fun Typography.mapStyles(f: (TextStyle) -> TextStyle) = Typography(
+    displayLarge = f(displayLarge),
+    displayMedium = f(displayMedium),
+    displaySmall = f(displaySmall),
+    headlineLarge = f(headlineLarge),
+    headlineMedium = f(headlineMedium),
+    headlineSmall = f(headlineSmall),
+    titleLarge = f(titleLarge),
+    titleMedium = f(titleMedium),
+    titleSmall = f(titleSmall),
+    bodyLarge = f(bodyLarge),
+    bodyMedium = f(bodyMedium),
+    bodySmall = f(bodySmall),
+    labelLarge = f(labelLarge),
+    labelMedium = f(labelMedium),
+    labelSmall = f(labelSmall),
+)
+
+private fun TextStyle.heavier(by: Int): TextStyle {
+    val w = (fontWeight?.weight ?: 400) + by
+    return copy(fontWeight = FontWeight(w.coerceIn(100, 900)))
+}
+
+/**
+ * The type scale of a style. The original keeps SF Pro Display exactly as it
+ * was; the others change family, weight or tracking only — no new font files,
+ * so the APK does not grow.
+ */
+private fun typographyFor(style: ThemeStyle, font: AppFont): Typography {
+    val base = when (font) {
+        AppFont.DEFAULT -> BitChordTypography
+        AppFont.LEGACY -> LegacyTypography
+    }
+    return when (style) {
+        ThemeStyle.BITCHORD -> base
+        // Big, heavy, geometric.
+        ThemeStyle.NEOBRUTALISM -> base.mapStyles {
+            it.heavier(200).copy(fontFamily = FontFamily.SansSerif, letterSpacing = (-0.2).sp)
+        }
+        // Fixed-width, like the system fonts of the era.
+        ThemeStyle.WINDOWS95 -> base.mapStyles {
+            it.copy(fontFamily = FontFamily.Monospace, letterSpacing = 0.sp)
+        }
+        // SF Pro, spread out.
+        ThemeStyle.VAPORWAVE -> base.mapStyles {
+            it.copy(letterSpacing = 1.2.sp)
+        }
+        // Terminal.
+        ThemeStyle.SPACE -> base.mapStyles {
+            it.copy(fontFamily = FontFamily.Monospace, letterSpacing = 0.6.sp)
+        }
+    }
+}
+
 @Composable
 fun BitChordTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     font: AppFont = AppFont.DEFAULT,
+    style: ThemeStyle = ThemeStyle.BITCHORD,
+    /** ARGB accent chosen by the user, or null for the style's own. */
+    accent: Int? = null,
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = when (font) {
-            AppFont.DEFAULT -> BitChordTypography
-            AppFont.LEGACY -> LegacyTypography
-        },
-        content = content,
-    )
+    val palette = remember(style, darkTheme, accent) {
+        stylePalette(
+            style = style,
+            dark = darkTheme,
+            accent = accent?.let { Color(it) },
+            original = if (darkTheme) DarkColors else LightColors,
+        )
+    }
+    val typography = remember(style, font) { typographyFor(style, font) }
+    val shapes = remember(style) { shapesFor(style) }
+    CompositionLocalProvider(LocalThemeExtras provides palette.extras) {
+        MaterialTheme(
+            colorScheme = palette.scheme,
+            typography = typography,
+            shapes = shapes,
+            content = content,
+        )
+    }
 }
 
 /**

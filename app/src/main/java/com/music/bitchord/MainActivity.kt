@@ -356,6 +356,9 @@ import com.music.bitchord.ui.replay.ReplayStories
 import com.music.bitchord.ui.replay.ReplayStoryPage
 import com.music.bitchord.ui.replay.rememberReplayState
 import com.music.bitchord.ui.theme.BitChordTheme
+import com.music.bitchord.ui.theme.LocalThemeBackdrop
+import com.music.bitchord.ui.theme.drawThemeBackdrop
+import com.music.bitchord.ui.theme.rememberThemeBackdrop
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import com.music.bitchord.data.canvas.keyColors
@@ -400,6 +403,8 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
             val appFont by AppSettings.appFont.collectAsStateWithLifecycle()
+            val themeStyle by AppSettings.themeStyle.collectAsStateWithLifecycle()
+            val themeAccent by AppSettings.themeAccent.collectAsStateWithLifecycle()
             val highPerformance by AppSettings.highPerformanceMode.collectAsStateWithLifecycle()
             val liquidGlassEnabled by AppSettings.liquidGlass.collectAsStateWithLifecycle()
             val iosOverscrollFactory = rememberIosOverscrollFactory()
@@ -413,7 +418,7 @@ class MainActivity : AppCompatActivity() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
-            BitChordTheme(darkTheme = darkTheme, font = appFont) {
+            BitChordTheme(darkTheme = darkTheme, font = appFont, style = themeStyle, accent = themeAccent) {
                 // The glass surfaces sample this layer, and a layer records only
                 // what is drawn into it — which, for BitChord, is a page that
                 // paints no background of its own. Everywhere a page is not
@@ -423,10 +428,10 @@ class MainActivity : AppCompatActivity() {
                 // and text came through it untouched. The window's background is
                 // the floor the pages have always been drawn against, so it is
                 // laid down here too and the recording is opaque like the screen.
-                val windowBackground = MaterialTheme.colorScheme.background
-                val paintBackdrop: ContentDrawScope.() -> Unit = remember(windowBackground) {
+                val themeBackdrop = rememberThemeBackdrop()
+                val paintBackdrop: ContentDrawScope.() -> Unit = remember(themeBackdrop) {
                     {
-                        drawRect(windowBackground)
+                        drawThemeBackdrop(themeBackdrop)
                         drawContent()
                     }
                 }
@@ -435,6 +440,7 @@ class MainActivity : AppCompatActivity() {
                     LocalOverscrollFactory provides iosOverscrollFactory,
                     LocalLiquidGlassEnabled provides liquidGlassEnabled,
                     LocalAppBackdrop provides appBackdrop,
+                    LocalThemeBackdrop provides themeBackdrop,
                 ) {
                 // The window's width, measured rather than asked for.
                 //
@@ -2773,10 +2779,13 @@ private fun BitChordApp(
         if (!navigator.pop() && !viewModel.closeMoodGenre()) selectedTab = TAB_HOME
     }
 
+    // The flat page colour for the original look; the style's own backdrop or the
+    // user's wallpaper otherwise — see [drawThemeBackdrop].
+    val themeBackdropSpec = LocalThemeBackdrop.current
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .drawBehind { drawThemeBackdrop(themeBackdropSpec) }
             // Nothing of the page under a portrait player that is fully up:
             // that player is its own window, opaque from edge to edge, and
             // this one drawing on behind it — the page, the glass bar and the
@@ -5296,6 +5305,9 @@ private fun BitChordApp(
             // request rather than a value that was already true.
             var captureRequest by remember(mode) { mutableIntStateOf(0) }
             var captureFailed by remember(mode) { mutableStateOf(false) }
+            // Raised by "Go to YouTube Music": a sign-in can end on a page of
+            // Google's with nothing on it that leads back.
+            var homeRequest by remember(mode) { mutableIntStateOf(0) }
             var pageReady by remember(mode) { mutableStateOf(false) }
             var confirmingProfile by remember(mode) { mutableStateOf(false) }
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -5347,6 +5359,10 @@ private fun BitChordApp(
                                     else stringResource(R.string.use_this_profile),
                                 )
                             }
+                        } else {
+                            TextButton(onClick = { homeRequest++ }) {
+                                Text(stringResource(R.string.go_to_youtube_music))
+                            }
                         }
                     }
                     YtMusicLoginScreen(
@@ -5355,6 +5371,7 @@ private fun BitChordApp(
                             googleAccounts.firstOrNull { it.accountId == activeAccountId }?.cookie
                         } else null,
                         captureRequest = captureRequest,
+                        homeRequest = homeRequest,
                         onPageReady = { pageReady = it },
                         onCaptureUnavailable = {
                             confirmingProfile = false

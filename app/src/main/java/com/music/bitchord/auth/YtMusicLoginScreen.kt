@@ -1,7 +1,9 @@
 package com.music.bitchord.auth
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.webkit.CookieManager
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.music.bitchord.data.DebugLog as Log
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -72,6 +76,12 @@ fun YtMusicLoginScreen(
     onPageReady: (Boolean) -> Unit = {},
     /** For a host that needs the WebView set up differently — the TV app, for its remote. */
     configureWebView: (WebView) -> Unit = {},
+    /**
+     * Raise to send the page to YouTube Music's home. For when a sign-in ends
+     * somewhere else — an account page, a "stay signed in" offer — and nothing
+     * on that page leads back. Ignored at its initial value.
+     */
+    homeRequest: Int = 0,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     val currentOnCaptured by rememberUpdatedState(onCaptured)
@@ -83,6 +93,11 @@ fun YtMusicLoginScreen(
         val view = webView
         if (view == null) currentOnUnavailable()
         else captureFrom(view, currentOnCaptured, currentOnUnavailable)
+    }
+
+    LaunchedEffect(homeRequest) {
+        if (homeRequest == 0) return@LaunchedEffect
+        webView?.loadUrl("$MUSIC_ORIGIN/")
     }
 
     AndroidView(
@@ -104,9 +119,29 @@ fun YtMusicLoginScreen(
                 // automation — so the same cosmetic strip Spotify and Discord
                 // sign-in already applies goes on here too.
                 settings.userAgentString = browserUserAgent(settings.userAgentString)
+                hideEmbeddedBrowserTells(this)
                 configureWebView(this)
 
                 webViewClient = object : WebViewClient() {
+                    // Anything that is not a web page — Google's "open in the
+                    // YouTube app" intent: links, a market: link — would end in
+                    // ERR_UNKNOWN_URL_SCHEME and a blank screen with no way on.
+                    // Refused here, so the page the user is on stays put.
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): Boolean {
+                        val scheme = request?.url?.scheme?.lowercase()
+                        return scheme != null && scheme != "http" && scheme != "https" &&
+                            scheme != "about" && scheme != "data"
+                    }
+
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                        // Leaving the Music origin takes the confirm button
+                        // away until the page is back on it.
+                        if (url?.startsWith(MUSIC_ORIGIN) != true) currentOnPageReady(false)
+                    }
+
                     override fun onPageFinished(view: WebView?, url: String?) {
                         // Reaching the Music origin only enables confirmation.
                         // A multi-channel login can still be waiting for the
@@ -122,6 +157,31 @@ fun YtMusicLoginScreen(
             }
         },
     )
+}
+
+/**
+ * Removes what lets Google tell this is an embedded browser rather than Chrome,
+ * beyond the user agent [browserUserAgent] already cleans up.
+ *
+ * - `X-Requested-With`: a WebView sends the app's package name in it with every
+ *   request, and Google's sign-in answers "This browser or app may not be
+ *   secure". An empty allow-list stops the header being sent at all (WebView
+ *   111+; older ones simply keep sending it, which is what they did before).
+ * - Third-party cookies: off by default in a WebView. Sign-in sets the YouTube
+ *   cookies from accounts.google.com, and without them the page can come back
+ *   from a successful sign-in still showing "Sign in".
+ */
+private fun hideEmbeddedBrowserTells(view: WebView) {
+    runCatching {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+            WebSettingsCompat.setRequestedWithHeaderOriginAllowList(view.settings, emptySet())
+        }
+    }.onFailure { Log.w(TAG, "could not drop X-Requested-With: ${it.message}") }
+    runCatching {
+        val cookies = CookieManager.getInstance()
+        cookies.setAcceptCookie(true)
+        cookies.setAcceptThirdPartyCookies(view, true)
+    }.onFailure { Log.w(TAG, "could not enable cookies: ${it.message}") }
 }
 
 /**

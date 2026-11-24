@@ -10,15 +10,15 @@
 
 ## Estado
 
-Fase 1 y 2 completadas: limpieza del código original, marca Mercurio y saludo aleatorio en el Home.
+Fases 1 a 5 hechas: limpieza, marca, saludo, Supabase y sistema de temas con fondo de pantalla.
 
 | Fase | Contenido | Estado |
 |---|---|---|
 | 1 | Limpieza (actualizador, telemetría, servidores y enlaces del autor) | ✅ |
 | 2 | Marca Mercurio, ícono, saludo aleatorio con tu nombre | ✅ |
 | 3 | Supabase: sesión anónima, perfil (nombre) e historial | ✅ (ver abajo) |
-| 4 | Sistema de temas (base) | ⏳ |
-| 5 | Temas: Neobrutalismo, Windows 95, Vaporwave, Space Computer | ⏳ |
+| 4 | Sistema de temas (base): estilo, acento, fondo de pantalla | ✅ |
+| 5 | Temas: Neobrutalismo, Windows 95, Vaporwave, Space Computer | ✅ (primera versión) |
 | 6 | Versión de PC | ⏳ |
 | 7 | Mascotas flotantes y extras | ⏳ |
 
@@ -36,12 +36,27 @@ Qué se sincroniza hoy: el nombre del perfil (se restaura si la instalación loc
 
 Nota: una sesión anónima es de esa instalación. Si desinstalas, se crea otro usuario; para conservar los datos entre dispositivos hará falta vincular un correo (pendiente).
 
+## Temas y fondo de pantalla
+
+En **Ajustes → Apariencia**:
+
+- **Tema** (sistema / claro / oscuro) funciona con todos los estilos.
+- **Estilo**: BitChord (el original), Neobrutalismo, Windows 95, Vaporwave y Space Computer. Cada uno tiene versión clara y oscura.
+- **Color de acento**: sustituye el color principal del estilo (o vuelve al del estilo).
+- **Fondo de pantalla**: elige una imagen de la galería. Se copia dentro de la app (reducida a 1600 px), así que no pide permisos ni se pierde si borras la original. Con imagen puedes ajustar la **capa sobre la imagen** (oscurece en modo oscuro, aclara en modo claro) y el **desenfoque**.
+
+Cómo está hecho (para añadir un estilo nuevo): `data/settings/ThemeStyle.kt` (la lista), `ui/theme/ThemeStyles.kt` (paletas, formas y marcos), `ui/theme/Theme.kt` (tipografía) y `ui/theme/ThemeBackdrop.kt` (fondo y fondo de pantalla). Los estilos no añaden fuentes ni imágenes: todo se dibuja con código, así que el APK no crece.
+
 ## Compilar el APK con GitHub Actions
 
 1. Sube este proyecto a un repositorio de GitHub (rama `main`).
 2. Abre la pestaña **Actions** → **Build Mercurio APK** → **Run workflow** (también corre solo en cada push).
 3. Al terminar (10-25 min), abre la ejecución y descarga **mercurio-apk** en *Artifacts*.
 4. Dentro del zip, el archivo `app-prod-universal-release.apk` funciona en cualquier teléfono.
+
+### Versión lite
+
+En **Actions → Build Mercurio APK → Run workflow** elige `lite` (o `both`) en *edition*. Descarga **mercurio-lite-apk**. Es solo arm64-v8a (casi todos los teléfonos de los últimos años), paquete `com.mercurio.app.lite` (se instala junto a la full) y arranca con desenfoque dinámico y animaciones reducidas y sin portadas animadas. En local: `./gradlew -Pmercurio.lite=true :app:assembleProdRelease`.
 
 ### Firma (opcional, recomendado)
 

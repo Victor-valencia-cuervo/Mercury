@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.music.bitchord.ui.theme.LocalThemeExtras
+import com.music.bitchord.ui.theme.themedOver
+import com.music.bitchord.ui.theme.themedShape
+import com.music.bitchord.ui.theme.themedUnder
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -372,7 +376,8 @@ fun MiniPlayer(
     // height if the row's contents ever change it — which is what keeps a pill
     // a pill instead of a rounded rectangle. Same idiom as [FloatingBottomBar]
     // directly below it, so the two shapes are the same family.
-    val shape = RoundedCornerShape(percent = 50)
+    val themeExtras = LocalThemeExtras.current
+    val shape = themedShape(RoundedCornerShape(percent = 50))
     Box(
         modifier = modifier
             .padding(horizontal = BAR_GUTTER)
@@ -390,6 +395,9 @@ fun MiniPlayer(
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
             )
+            // Neobrutalism's hard shadow and Vaporwave's glow sit behind the
+            // clip, which would cut them off.
+            .themedUnder(shape)
             .clip(shape)
             .then(
                 if (reduceDynamicBlur) {
@@ -401,7 +409,13 @@ fun MiniPlayer(
                     )
                 },
             )
-            .border(0.5.dp, Color.White.copy(alpha = 0.10f), shape)
+            .then(
+                if (themeExtras.isDefault) {
+                    Modifier.border(0.5.dp, Color.White.copy(alpha = 0.10f), shape)
+                } else {
+                    Modifier.themedOver(shape)
+                },
+            )
             // Deliberately silent: the whole bar is the target, so it catches
             // stray taps meant for the page behind it, and the sheet rising is
             // its own confirmation. The glyphs on it still buzz.

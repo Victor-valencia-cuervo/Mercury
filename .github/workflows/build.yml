@@ -1,15 +1,33 @@
-name: Build APK
+name: Build Mercurio APK
 
-# Every push to main builds the debug APK; it can also be run by hand.
-# The APK lands in the run's "Artifacts" section as Mercury-debug-apk.
+# Corre en cada push a main y también a mano desde la pestaña Actions
+# ("Run workflow"). El APK queda en "Artifacts" al final de la ejecución.
+# En ejecución manual puedes elegir también un APK de depuración.
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      edition:
+        description: 'Qué compilar: full (todos los teléfonos), lite (solo arm64, más ligero) o both'
+        type: choice
+        options: [full, lite, both]
+        default: full
+      debug:
+        description: 'Compilar también el APK de depuración (más rápido, sin firmar con tu llave)'
+        type: boolean
+        default: false
+
+# Si haces dos push seguidos, se cancela la compilación vieja.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,21 +35,115 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
           java-version: '17'
+          distribution: 'temurin'
 
+      # Gradle + caché de dependencias y de compilación (mucho más rápido a
+      # partir de la segunda ejecución).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
-      - name: Build prod debug APK
-        run: ./gradlew :app:assembleProdDebug --stacktrace
+      # Firma del APK.
+      #  - Si definiste los secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS y
+      #    KEY_PASSWORD, se usa tu llave: cada build queda firmado igual y el APK
+      #    se puede instalar ENCIMA de la versión anterior (actualización).
+      #  - Si no existen, se crea una llave temporal: el APK instala sin problema,
+      #    pero cada build tiene una firma distinta, así que para instalar uno
+      #    nuevo hay que desinstalar el anterior.
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > mercurio-release.jks
+            SP="$KEYSTORE_PASSWORD"; KA="$KEY_ALIAS"; KP="$KEY_PASSWORD"
+            echo "Usando la llave de los secrets."
+          else
+            SP="mercurio-ci"; KA="mercurio"; KP="mercurio-ci"
+            keytool -genkeypair -keystore mercurio-release.jks \
+              -storepass "$SP" -keypass "$KP" -alias "$KA" \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mercurio"
+            echo "Usando una llave temporal (sin secrets configurados)."
+          fi
+          {
+            echo "storeFile=mercurio-release.jks"
+            echo "storePassword=$SP"
+            echo "keyAlias=$KA"
+            echo "keyPassword=$KP"
+          } > keystore.properties
 
-      - name: Upload APK
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # -Pbitchord.bundleWear=false: no empaqueta la app de Wear OS dentro del
+      # APK (es más rápido y no la necesitamos por ahora).
+      - name: Build release APK (full)
+        if: ${{ (inputs.edition || 'full') != 'lite' }}
+        run: |
+          ./gradlew -Pbitchord.bundleWear=false :app:assembleProdRelease --stacktrace
+          mkdir -p dist/full
+          cp app/build/outputs/apk/prod/release/*.apk dist/full/
+
+      # Lite: un solo ABI (arm64-v8a) y valores por defecto ligeros.
+      # Paquete com.mercurio.app.lite, se instala junto a la versión full.
+      - name: Build release APK (lite)
+        if: ${{ (inputs.edition || 'full') != 'full' }}
+        run: |
+          ./gradlew -Pbitchord.bundleWear=false -Pmercurio.lite=true :app:assembleProdRelease --stacktrace
+          mkdir -p dist/lite
+          cp app/build/outputs/apk/prod/release/*arm64*.apk dist/lite/
+
+      - name: Build debug APK (opcional)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
+        run: ./gradlew -Pbitchord.bundleWear=false :app:assembleProdDebug --stacktrace
+
+      # Un APK ya viene comprimido: no gastamos tiempo en volver a comprimirlo.
+      - name: Upload APK full
+        if: ${{ (inputs.edition || 'full') != 'lite' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Mercury-debug-apk
+          name: mercurio-apk
+          path: dist/full/*.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload APK lite
+        if: ${{ (inputs.edition || 'full') != 'full' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mercurio-lite-apk
+          path: dist/lite/*.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload debug APK
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mercurio-debug-apk
           path: app/build/outputs/apk/prod/debug/*.apk
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      # Si algo falla, el informe de Gradle ayuda a ver por qué.
+      - name: Upload build reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            app/build/reports
+            **/build/reports/problems
+          if-no-files-found: ignore
+          retention-days: 7

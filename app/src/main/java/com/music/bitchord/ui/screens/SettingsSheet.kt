@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BlurOff
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Brightness4
+import androidx.compose.material.icons.rounded.Image as ImageIcon
 import androidx.compose.material.icons.rounded.Cached
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -168,6 +170,13 @@ import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.DownloadQuality
 import com.music.bitchord.data.settings.ThemeMode
+import com.music.bitchord.data.settings.ThemeStyle
+import com.music.bitchord.data.settings.ThemeAccents
+import com.music.bitchord.ui.theme.WallpaperStore
+import com.music.bitchord.ui.theme.contentOn
+import com.music.bitchord.ui.theme.themedOver
+import com.music.bitchord.ui.theme.themedShape
+import com.music.bitchord.ui.theme.themedUnder
 import com.music.bitchord.data.settings.AppFont
 import com.music.bitchord.data.settings.PlayerTheme
 import com.music.bitchord.data.stats.Backup
@@ -262,6 +271,25 @@ fun SettingsScreen(
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
     val appFont by AppSettings.appFont.collectAsStateWithLifecycle()
+    val themeStyle by AppSettings.themeStyle.collectAsStateWithLifecycle()
+    val themeAccent by AppSettings.themeAccent.collectAsStateWithLifecycle()
+    val wallpaperVersion by AppSettings.wallpaperVersion.collectAsStateWithLifecycle()
+    val wallpaperDim by AppSettings.wallpaperDim.collectAsStateWithLifecycle()
+    val wallpaperBlur by AppSettings.wallpaperBlur.collectAsStateWithLifecycle()
+    val themeScope = rememberCoroutineScope()
+    // The system picker: no storage permission needed, and the picture is
+    // copied into the app, so it survives the original being deleted.
+    val pickWallpaper = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            themeScope.launch {
+                if (WallpaperStore.import(context, uri)) {
+                    AppSettings.setWallpaperVersion(System.currentTimeMillis())
+                } else {
+                    Toast.makeText(context, R.string.wallpaper_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
     val preferUsbDac by AppSettings.preferUsbDac.collectAsStateWithLifecycle()
@@ -993,6 +1021,93 @@ fun SettingsScreen(
                     onSelect = { AppSettings.setThemeMode(ThemeMode.entries[it]) },
                     modifier = Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
+            }
+            val themeStyleTitle = stringResource(R.string.theme_style)
+            row(themeStyleTitle, "style", "skin", "neobrutalism", "windows 95", "vaporwave", "space", "bitchord") {
+                SettingsRow(
+                    icon = SfIcons.Gradient,
+                    title = themeStyleTitle,
+                    subtitle = themeStyle.description(),
+                    value = themeStyle.localizedLabel(),
+                    onClick = { onOpenChoice(SettingsChoiceKind.THEME_STYLE) },
+                )
+            }
+            val accentTitle = stringResource(R.string.theme_accent)
+            row(accentTitle, "accent", "color", "colour") {
+                Column(Modifier.padding(horizontal = ROW_INSET, vertical = 12.dp)) {
+                    Text(
+                        text = accentTitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    // The style's own accent first, then the palette — in rows
+                    // of five so they fit the narrowest phone.
+                    val swatches: List<Int?> = listOf<Int?>(null) + ThemeAccents
+                    swatches.chunked(5).forEach { line ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.padding(bottom = 10.dp),
+                        ) {
+                            line.forEach { argb ->
+                                AccentSwatch(
+                                    argb = argb,
+                                    selected = themeAccent == argb,
+                                    onClick = { AppSettings.setThemeAccent(argb) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            val wallpaperTitle = stringResource(R.string.wallpaper)
+            row(wallpaperTitle, "wallpaper", "background", "image", "fondo", "picture") {
+                SettingsRow(
+                    icon = Icons.Rounded.ImageIcon,
+                    title = wallpaperTitle,
+                    subtitle = stringResource(
+                        if (wallpaperVersion == 0L) R.string.wallpaper_none else R.string.wallpaper_set,
+                    ),
+                    onClick = { pickWallpaper.launch("image/*") },
+                )
+            }
+            if (wallpaperVersion != 0L) {
+                val dimTitle = stringResource(R.string.wallpaper_dim)
+                row(dimTitle, "wallpaper", "dark", "dim", "overlay", divided = false) {
+                    SliderRow(
+                        icon = Icons.Rounded.Brightness4,
+                        title = dimTitle,
+                        subtitle = stringResource(R.string.wallpaper_dim_subtitle),
+                        value = "${(wallpaperDim * 100).roundToInt()}%",
+                        sliderValue = wallpaperDim,
+                        onSliderValue = { AppSettings.setWallpaperDim(it) },
+                        valueRange = 0f..0.95f,
+                        steps = 18,
+                    )
+                }
+                val blurTitle = stringResource(R.string.wallpaper_blur)
+                row(blurTitle, "wallpaper", "blur", "soft", divided = false) {
+                    SliderRow(
+                        icon = Icons.Rounded.BlurOff,
+                        title = blurTitle,
+                        value = "${(wallpaperBlur * 100).roundToInt()}%",
+                        sliderValue = wallpaperBlur,
+                        onSliderValue = { AppSettings.setWallpaperBlur(it) },
+                        valueRange = 0f..1f,
+                        steps = 9,
+                    )
+                }
+                val removeTitle = stringResource(R.string.wallpaper_remove)
+                row(removeTitle, "wallpaper", "remove", "delete") {
+                    SettingsRow(
+                        icon = Icons.Rounded.DeleteSweep,
+                        title = removeTitle,
+                        onClick = {
+                            WallpaperStore.delete(context)
+                            AppSettings.setWallpaperVersion(0L)
+                        },
+                    )
+                }
             }
             val fontTitle = stringResource(R.string.font)
             row(fontTitle, "typeface", "sf pro", "legacy") {
@@ -2066,6 +2181,65 @@ private fun PlayerTheme.description(): String = stringResource(
     },
 )
 
+
+@Composable
+private fun ThemeStyle.localizedLabel(): String = stringResource(
+    when (this) {
+        ThemeStyle.BITCHORD -> R.string.theme_style_bitchord
+        ThemeStyle.NEOBRUTALISM -> R.string.theme_style_neobrutalism
+        ThemeStyle.WINDOWS95 -> R.string.theme_style_windows95
+        ThemeStyle.VAPORWAVE -> R.string.theme_style_vaporwave
+        ThemeStyle.SPACE -> R.string.theme_style_space
+    },
+)
+
+@Composable
+private fun ThemeStyle.description(): String = stringResource(
+    when (this) {
+        ThemeStyle.BITCHORD -> R.string.theme_style_bitchord_subtitle
+        ThemeStyle.NEOBRUTALISM -> R.string.theme_style_neobrutalism_subtitle
+        ThemeStyle.WINDOWS95 -> R.string.theme_style_windows95_subtitle
+        ThemeStyle.VAPORWAVE -> R.string.theme_style_vaporwave_subtitle
+        ThemeStyle.SPACE -> R.string.theme_style_space_subtitle
+    },
+)
+
+/** One accent colour; [argb] null is "the style's own", drawn as a sparkle. */
+@Composable
+private fun AccentSwatch(argb: Int?, selected: Boolean, onClick: () -> Unit) {
+    val color = argb?.let { Color(it) }
+    val ring = MaterialTheme.colorScheme.onBackground
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(color ?: MaterialTheme.colorScheme.surface)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) ring else MaterialTheme.colorScheme.outline,
+                shape = CircleShape,
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (color == null) {
+            Icon(
+                imageVector = Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        } else if (selected) {
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = null,
+                tint = contentOn(color),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun AppFont.localizedLabel(): String = stringResource(
     when (this) {
@@ -2477,12 +2651,15 @@ internal fun SettingsGroup(
     } else {
         Spacer(Modifier.height(topSpacing))
     }
+    val groupShape = themedShape(GroupShape, 14.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = GROUP_INSET)
-            .clip(GroupShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .themedUnder(groupShape)
+            .clip(groupShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .themedOver(groupShape),
     ) {
         content()
     }
@@ -2831,6 +3008,7 @@ enum class SettingsChoiceKind(@param:StringRes val title: Int) {
     AUTOMIX_PERFORMANCE(R.string.automix_performance),
     BIT_PERFECT(R.string.bit_perfect_output),
     FONT(R.string.font),
+    THEME_STYLE(R.string.theme_style),
 }
 
 /** The main page's list of categories: a glyph and a name each, and a chevron into it. */
@@ -2947,6 +3125,20 @@ fun SettingsChoicePage(
                     // Leaving the mode needs no warning; entering it hands
                     // volume to the DAC, at full scale.
                     if (mode == BitPerfectMode.OFF) AppSettings.setBitPerfectMode(mode) else onConfirmBitPerfect(mode)
+                }
+            }
+
+            SettingsChoiceKind.THEME_STYLE -> {
+                val selected by AppSettings.themeStyle.collectAsStateWithLifecycle()
+                ChoiceGroup(
+                    options = ThemeStyle.entries,
+                    selected = selected,
+                    label = { it.localizedLabel() },
+                    detail = { it.description() },
+                    footer = stringResource(R.string.theme_style_footer),
+                ) { style ->
+                    AppSettings.setThemeStyle(style)
+                    onChosen()
                 }
             }
 

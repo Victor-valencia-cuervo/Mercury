@@ -1,6 +1,7 @@
 package com.music.bitchord
 
 import android.app.Application
+import android.app.ActivityManager
 import androidx.annotation.OptIn
 import androidx.compose.ui.ComposeUiFlags
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -260,18 +261,18 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
             }
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, 0.20)
+                    .maxSizePercent(context, if (lowMemoryProfile) 0.12 else 0.20)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(100L * 1024 * 1024)
+                    .maxSizeBytes(if (lowMemoryProfile) 75L * 1024 * 1024 else 100L * 1024 * 1024)
                     .build()
             }
             // Covers arriving with a hard cut read as the list flickering as
             // it scrolls; a short fade reads as them developing.
-            .crossfade(200)
+            .crossfade(if (lowMemoryProfile) 100 else 200)
             .allowHardware(!emulatedGpu)
             .build()
 
@@ -294,6 +295,11 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
     private val emulatedGpu: Boolean by lazy {
         listOf("/vendor/lib64", "/vendor/lib", "/system/lib64", "/system/lib")
             .any { java.io.File("$it/egl/libEGL_emulation.so").exists() }
+    }
+
+    private val lowMemoryProfile: Boolean by lazy {
+        val activityManager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        activityManager.isLowRamDevice || activityManager.memoryClass <= 2048
     }
 
     private fun initLastfm() {

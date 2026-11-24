@@ -2,6 +2,7 @@ package com.music.bitchord.data.settings
 
 import com.music.bitchord.data.webdav.update
 import com.music.bitchord.ui.components.VideoThumbnails
+import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
@@ -186,6 +187,7 @@ enum class SongSort {
 object AppSettings {
 
     private lateinit var prefs: SharedPreferences
+    private var lowMemoryDevice = false
 
     /** Only for the Discord, WebDAV and SMB secrets — everything else on here is plain prefs. */
     private lateinit var authStore: AuthStore
@@ -952,6 +954,8 @@ object AppSettings {
     fun init(context: Context, authStore: AuthStore) {
         prefs = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
         this.authStore = authStore
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        lowMemoryDevice = activityManager.isLowRamDevice || activityManager.memoryClass <= 2048
         com.music.bitchord.data.spotify.LocalPlaylistStore.init(context)
         com.music.bitchord.data.OfflinePlaylists.init(
             context,
@@ -1109,7 +1113,7 @@ object AppSettings {
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)
         showNerdStats.value = prefs.getBoolean(KEY_NERD_STATS, false)
         showListenTogetherButton.value = prefs.getBoolean(KEY_LISTEN_TOGETHER_BUTTON, false)
-        reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, BuildConfig.LITE)
+        reduceAnimation.value = prefs.getBoolean(KEY_REDUCE_ANIMATION, BuildConfig.LITE || lowMemoryDevice)
         onboardingComplete.value = prefs.getBoolean(KEY_ONBOARDING_COMPLETE, false)
         highPerformanceMode.value = prefs.getBoolean(KEY_HIGH_PERFORMANCE_MODE, false)
         performanceRefreshRate.value = normalizePerformanceRefreshRate(
@@ -1130,10 +1134,10 @@ object AppSettings {
         squareVideoThumbnails.value = prefs.getBoolean(KEY_SQUARE_VIDEO_THUMBNAILS, false)
         VideoThumbnails.square = squareVideoThumbnails.value
         smartVersionAlignment.value = prefs.getBoolean(KEY_SMART_VERSION_ALIGNMENT, true)
-        reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, BuildConfig.LITE)
-        disableBlendEffects.value = prefs.getBoolean(KEY_DISABLE_BLEND_EFFECTS, false)
+        reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, BuildConfig.LITE || lowMemoryDevice)
+        disableBlendEffects.value = prefs.getBoolean(KEY_DISABLE_BLEND_EFFECTS, lowMemoryDevice)
         liquidGlass.value = prefs.getBoolean(KEY_LIQUID_GLASS, false)
-        glassPerformance.value = prefs.getBoolean(KEY_GLASS_PERFORMANCE, false)
+        glassPerformance.value = prefs.getBoolean(KEY_GLASS_PERFORMANCE, lowMemoryDevice)
         progressiveBlur.value = prefs.getBoolean(KEY_PROGRESSIVE_BLUR, false)
         lyricsBlur.value = prefs.getBoolean(KEY_LYRICS_BLUR, true)
         lyricsOffsetMs.value = prefs.getInt(KEY_LYRICS_OFFSET_MS, 0)
@@ -1143,7 +1147,7 @@ object AppSettings {
             reduceAnimation.value = false
             reduceDynamicBlur.value = false
         }
-        animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, !BuildConfig.LITE)
+        animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, !BuildConfig.LITE && !lowMemoryDevice)
         canvasOverCellular.value = prefs.getBoolean(KEY_CANVAS_OVER_CELLULAR, false)
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)

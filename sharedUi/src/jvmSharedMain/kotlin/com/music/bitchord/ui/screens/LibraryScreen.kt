@@ -31,10 +31,12 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -84,6 +86,8 @@ fun LibraryScreen(
     onShelfItemClick: (ShelfItem) -> Unit,
     onShelfItemLongPress: (ShelfItem) -> Unit,
     onNewPlaylist: () -> Unit,
+    onSyncLocalLikes: (() -> Unit)? = null,
+    localLikesSyncing: Boolean = false,
     onImportSpotifyPlaylist: (() -> Unit)? = null,
     /**
      * A shelf's "Show all" — every shelf's row here stops at five cards (see
@@ -146,6 +150,30 @@ fun LibraryScreen(
             }
             if (deviceItems.isNotEmpty()) {
                 item(key = "shelf:$onDevice") {
+                    if (onSyncLocalLikes != null) {
+                        TextButton(
+                            onClick = onSyncLocalLikes,
+                            enabled = !localLikesSyncing,
+                            modifier = Modifier.padding(start = PAGE_GUTTER, top = 4.dp),
+                        ) {
+                            if (localLikesSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(
+                                stringResource(
+                                    if (localLikesSyncing) {
+                                        Res.string.sync_local_likes_progress
+                                    } else {
+                                        Res.string.sync_local_likes
+                                    },
+                                ),
+                            )
+                        }
+                    }
                     val onDeviceShelf = HomeShelf(title = onDevice, items = deviceItems)
                     LibraryGridShelf(
                         shelf = onDeviceShelf,

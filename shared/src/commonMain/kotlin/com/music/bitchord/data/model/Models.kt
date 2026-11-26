@@ -531,6 +531,13 @@ data class MoodGenreSection(
     val items: List<MoodGenre>,
 )
 
+/** Ranked songs from YouTube Music's regional/global Top 100 chart. */
+data class TopSongsChart(
+    val songs: List<Song>,
+    val playlistBrowseId: String,
+    val availableRegions: List<String>,
+)
+
 /** A mood or genre button and the exact browse request that it represents. */
 data class MoodGenre(
     val title: String,

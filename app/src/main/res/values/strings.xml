@@ -1266,6 +1266,8 @@
     <string name="local_likes_title">Liked on this device</string>
     <string name="local_likes_subtitle">%1$d songs · Kept on this device</string>
     <string name="local_likes_empty">Songs you like without signing in show up here — they\'re uploaded once you do</string>
+    <string name="local_likes_sync_summary">%1$d synced to YouTube Music · %2$d failed</string>
+    <string name="local_likes_sync_empty">No local likes are waiting to sync</string>
     <!-- The Mercury account: the app\'s own email login on Supabase. -->
     <string name="mercury_account">Mercury account</string>
     <string name="mercury_account_description">An email and a password on the app\'s own backend. It keeps your likes, playlists and settings in the cloud, and hands them to any device you sign in on.</string>

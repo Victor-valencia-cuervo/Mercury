@@ -139,8 +139,16 @@
     <string name="clear_search">Borrar búsqueda</string>
     <string name="downloaded">Descargada</string>
     <string name="explore">Explorar</string>
+    <string name="chart_top_songs">Canciones más escuchadas</string>
+    <string name="chart_top_100">Top 100 de YouTube Music</string>
+    <string name="chart_region">País: %1$s</string>
+    <string name="chart_global">Global</string>
+    <string name="chart_expand">Mostrar canciones de la lista</string>
+    <string name="chart_collapse">Ocultar canciones de la lista</string>
     <string name="library">Biblioteca</string>
     <string name="library_sign_in_description">Inicia sesión en tu cuenta de Google para ver tus canciones favoritas, playlists e historial de YouTube Music.</string>
+    <string name="sync_local_likes">Enviar favoritos del dispositivo a YouTube Music</string>
+    <string name="sync_local_likes_progress">Sincronizando favoritos…</string>
     <string name="new_playlist">Nueva lista</string>
     <string name="on_device">En el dispositivo</string>
     <string name="personalized_recommendations">Recibe recomendaciones personalizadas</string>
@@ -198,4 +206,13 @@
     <string name="search_library_empty">Busca las canciones de tu carpeta de Música local.</string>
     <string name="search_library_hint">Canciones, artistas y álbumes</string>
     <string name="search_library_no_results">Nada en Música local coincide con “%1$s”.</string>
+    <string name="home_quick_access">Accesos rápidos</string>
+    <string name="home_favorites_now">Favoritos del momento</string>
+    <string name="home_continue_listening">Seguir escuchando</string>
+    <string name="home_popular_releases">Álbumes y sencillos populares</string>
+    <string name="home_today_suggestions">Sugerencias para hoy</string>
+    <string name="home_favorite_artists">Artistas favoritos</string>
+    <string name="home_similar_to_taste">Similar a tus gustos</string>
+    <string name="home_popular_artists">Artistas populares</string>
+    <string name="home_recommended_videos">Vídeos musicales recomendados</string>
 </resources>

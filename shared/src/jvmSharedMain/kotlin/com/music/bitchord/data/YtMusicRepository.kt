@@ -15,6 +15,7 @@ import com.music.bitchord.data.model.LibraryPage
 import com.music.bitchord.data.model.LibraryState
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.MoodGenreSection
+import com.music.bitchord.data.model.TopSongsChart
 import com.music.bitchord.data.model.playlistMoves
 import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.SearchFilter
@@ -302,6 +303,20 @@ object YtMusicRepository {
     /** The server-defined mood and genre categories used by Explore. */
     suspend fun moodAndGenres(): Result<List<MoodGenreSection>> = call("moods-and-genres") {
         InnertubeParser.parseMoodAndGenres(Innertube.browse("FEmusic_moods_and_genres"))
+    }
+
+    /** The ranked Top 100 songs and country options from YouTube Music Charts. */
+    suspend fun topSongsChart(region: String): Result<TopSongsChart> = call("top-songs:$region") {
+        val response = Innertube.musicCharts(region)
+        val playlistBrowseId = InnertubeParser.parseTopSongsChartBrowseId(response)
+            ?: error("No Top 100 chart is available for $region")
+        val songs = songsPaged(playlistBrowseId).take(100)
+        if (songs.isEmpty()) error("The Top 100 chart for $region has no playable songs")
+        TopSongsChart(
+            songs = songs,
+            playlistBrowseId = playlistBrowseId,
+            availableRegions = InnertubeParser.parseChartRegionCodes(response),
+        )
     }
 
     /**

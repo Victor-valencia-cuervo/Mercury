@@ -532,6 +532,14 @@ object Innertube {
             params?.let { put("params", it) }
         }
 
+    /** The chart country selector is a browse form value, not just request locale. */
+    suspend fun musicCharts(region: String): JsonObject = postMusic("browse") {
+        put("browseId", "FEmusic_charts")
+        putJsonObject("formData") {
+            putJsonArray("selectedValues") { add(region) }
+        }
+    }
+
     /**
      * The next page of a paged browse response — playlists and library feeds
      * come back roughly 100 rows at a time. YouTube Music takes the token as

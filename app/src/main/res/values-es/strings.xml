@@ -1380,6 +1380,8 @@
     <string name="local_likes_title">Me gusta en este dispositivo</string>
     <string name="local_likes_subtitle">%1$d canciones · Guardadas en este dispositivo</string>
     <string name="local_likes_empty">Las canciones que te gusten sin iniciar sesión aparecerán aquí — se suben cuando inicies sesión</string>
+    <string name="local_likes_sync_summary">%1$d enviados a YouTube Music · %2$d errores</string>
+    <string name="local_likes_sync_empty">No hay favoritos locales pendientes de sincronizar</string>
     <!-- La cuenta Mercury: el login propio de la app (email) en Supabase. -->
     <string name="mercury_account">Cuenta Mercury</string>
     <string name="mercury_account_description">Un email y una contraseña en el backend propio de la app. Guarda tus me gusta, playlists y ajustes en la nube, y te los entrega en cualquier dispositivo donde inicies sesión.</string>

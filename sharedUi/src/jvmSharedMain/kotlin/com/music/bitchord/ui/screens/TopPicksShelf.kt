@@ -151,6 +151,7 @@ internal fun TopPicksShelf(
     /** The card, and the title it was showing — the station's name for the queue. */
     onClick: (TopPick, String) -> Unit,
     onLongPress: ((TopPick) -> Unit)?,
+    showHeader: Boolean = true,
 ) {
     val rowState = rememberLazyListState()
     // Which cards turned out to have a clip, by index, and which one plays.
@@ -163,7 +164,7 @@ internal fun TopPicksShelf(
             .collect { (scrolling, next) -> if (!scrolling) owner = next }
     }
     Column(Modifier.padding(bottom = 26.dp)) {
-        SectionHeader(stringResource(Res.string.top_picks_for_you))
+        if (showHeader) SectionHeader(stringResource(Res.string.top_picks_for_you))
         BoxWithConstraints {
             val cardWidth = topPickWidth(maxWidth)
             PausedWhileScrolling(rowState) {
@@ -195,10 +196,10 @@ internal fun TopPicksShelf(
 }
 
 /** Stands in for the row while it is being built, at the same size, so the feed doesn't jump. */
-fun LazyListScope.topPicksSkeleton() {
+fun LazyListScope.topPicksSkeleton(title: String? = null) {
     item(key = "skeleton:top-picks") {
         Column(Modifier.padding(bottom = 26.dp)) {
-            SectionHeaderSkeleton()
+            if (title == null) SectionHeaderSkeleton() else SectionHeader(title)
             BoxWithConstraints {
                 val cardWidth = topPickWidth(maxWidth)
                 LazyRow(

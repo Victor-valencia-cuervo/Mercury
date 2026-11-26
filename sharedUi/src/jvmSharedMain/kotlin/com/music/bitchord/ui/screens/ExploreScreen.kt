@@ -16,16 +16,31 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,12 +62,18 @@ import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.MoodGenre
 import com.music.bitchord.data.model.MoodGenreSection
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.TopSongsChart
 import com.music.bitchord.data.model.UiState
+import com.music.bitchord.data.model.ROW_ART_PX
+import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.ShimmerBox
 import com.music.bitchord.ui.components.feedSkeleton
+import com.music.bitchord.ui.components.thumbnailBorder
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +89,15 @@ fun ExploreScreen(
     modifier: Modifier = Modifier,
     /** The big "Explore" heading; the desktop's pages carry none. */
     showTitle: Boolean = true,
+    topSongsState: UiState<TopSongsChart>,
+    selectedChartRegion: String,
+    availableChartRegions: List<String>,
+    onChartRegionSelected: (String) -> Unit,
+    onRetryTopSongs: () -> Unit,
+    onTopSongClick: (List<Song>, Int, String) -> Unit,
 ) {
+    var chartExpanded by remember { mutableStateOf(false) }
+    val topSongsTitle = stringResource(Res.string.chart_top_songs)
     PullToRefresh(
         refreshing = refreshing,
         onRefresh = onRefresh,
@@ -99,6 +128,43 @@ fun ExploreScreen(
                         )
                     }
                 }
+                item(key = "explore:top-songs:header") {
+                    TopSongsChartHeader(
+                        selectedRegion = selectedChartRegion,
+                        availableRegions = availableChartRegions,
+                        expanded = chartExpanded,
+                        onExpandToggle = { chartExpanded = !chartExpanded },
+                        onRegionSelected = onChartRegionSelected,
+                    )
+                }
+                when (topSongsState) {
+                    UiState.Loading -> Unit
+                    is UiState.Error -> item(key = "explore:top-songs:error") {
+                        MessageState(
+                            topSongsState.message,
+                            actionLabel = stringResource(Res.string.retry),
+                            onAction = onRetryTopSongs,
+                        )
+                    }
+                    is UiState.Success -> if (chartExpanded) {
+                        itemsIndexed(
+                            items = topSongsState.data.songs,
+                            key = { index, song -> "top-song:$index:${song.videoId}" },
+                        ) { index, song ->
+                            TopChartSongRow(
+                                rank = index + 1,
+                                song = song,
+                                onClick = {
+                                    onTopSongClick(
+                                        topSongsState.data.songs,
+                                        index,
+                                        topSongsTitle,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
                 when (state) {
                     UiState.Loading -> item { ExploreSkeletonRows(columns) }
                     is UiState.Error -> item {
@@ -116,6 +182,138 @@ fun ExploreScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TopSongsChartHeader(
+    selectedRegion: String,
+    availableRegions: List<String>,
+    expanded: Boolean,
+    onExpandToggle: () -> Unit,
+    onRegionSelected: (String) -> Unit,
+) {
+    val regionOptions = remember(availableRegions, selectedRegion) {
+        val countries = (availableRegions + selectedRegion)
+            .map { it.uppercase(Locale.ROOT) }
+            .filter { it.length == 2 && it != "ZZ" }
+            .distinct()
+            .sortedBy { Locale("", it).displayCountry }
+        listOf("ZZ") + countries
+    }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, top = 14.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = stringResource(Res.string.chart_top_songs),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(Res.string.chart_top_100),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        Box {
+            TextButton(onClick = { menuExpanded = true }) {
+                Text(
+                    text = stringResource(Res.string.chart_region, chartRegionLabel(selectedRegion)),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                regionOptions.forEach { region ->
+                    DropdownMenuItem(
+                        text = { Text(chartRegionLabel(region)) },
+                        onClick = {
+                            menuExpanded = false
+                            if (region != selectedRegion) onRegionSelected(region)
+                        },
+                    )
+                }
+            }
+        }
+        IconButton(onClick = onExpandToggle) {
+            Icon(
+                imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = stringResource(
+                    if (expanded) Res.string.chart_collapse else Res.string.chart_expand,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun chartRegionLabel(region: String): String =
+    if (region == "ZZ") stringResource(Res.string.chart_global)
+    else Locale("", region).displayCountry.ifBlank { region }
+
+@Composable
+private fun TopChartSongRow(
+    rank: Int,
+    song: Song,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(6.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = PAGE_GUTTER, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = rank.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(34.dp),
+        )
+        AsyncImage(
+            model = song.thumbnailUrl.artworkAt(ROW_ART_PX),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .thumbnailBorder(shape),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
+        ) {
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = song.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

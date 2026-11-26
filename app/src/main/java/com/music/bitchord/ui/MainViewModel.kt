@@ -61,6 +61,7 @@ import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.TopSongsChart
 import com.music.bitchord.data.model.SongMenu
 import com.music.bitchord.data.model.SubscriptionState
 import com.music.bitchord.data.model.UiState
@@ -172,6 +173,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _explore = MutableStateFlow<UiState<List<MoodGenreSection>>>(UiState.Loading)
     val explore: StateFlow<UiState<List<MoodGenreSection>>> = _explore.asStateFlow()
+
+    private val _topSongsChart = MutableStateFlow<UiState<TopSongsChart>>(UiState.Loading)
+    val topSongsChart: StateFlow<UiState<TopSongsChart>> = _topSongsChart.asStateFlow()
+    private val _topSongsRegion = MutableStateFlow(defaultTopSongsRegion())
+    val topSongsRegion: StateFlow<String> = _topSongsRegion.asStateFlow()
+    private val _topSongsRegions = MutableStateFlow<List<String>>(emptyList())
+    val topSongsRegions: StateFlow<List<String>> = _topSongsRegions.asStateFlow()
+    private var topSongsChartRequested = false
+    private var topSongsChartJob: Job? = null
 
     private val _selectedMoodGenre = MutableStateFlow<MoodGenre?>(null)
     val selectedMoodGenre: StateFlow<MoodGenre?> = _selectedMoodGenre.asStateFlow()
@@ -596,6 +606,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _library = MutableStateFlow<UiState<LibraryPage>>(UiState.Loading)
     val library: StateFlow<UiState<LibraryPage>> = _library.asStateFlow()
+    private val _localLikesSyncing = MutableStateFlow(false)
+    val localLikesSyncing: StateFlow<Boolean> = _localLikesSyncing.asStateFlow()
+    private var localLikesSyncJob: Job? = null
 
     /** In-memory cache is partitioned by account and profile; it is never shared. */
     private data class ListenerSnapshot(
@@ -1614,7 +1627,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             when (feed) {
                 Feed.HOME -> refreshHome(identity)
-                Feed.EXPLORE -> fetchExplore()
+                Feed.EXPLORE -> {
+                    fetchExplore()
+                    loadTopSongsChart()
+                }
                 Feed.LIBRARY -> fetchLibrary(identity)
             }
             _refreshing.value = _refreshing.value - feed
@@ -1625,6 +1641,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         exploreRequested = true
         _explore.value = UiState.Loading
         viewModelScope.launch { fetchExplore() }
+        loadTopSongsChart()
     }
 
     private var exploreRequested = false
@@ -1632,7 +1649,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Call when the Explore tab becomes visible; loads it the first time. */
     fun onExploreShown() {
         if (!exploreRequested) loadExplore()
+        else if (!topSongsChartRequested) loadTopSongsChart()
     }
+
+    fun selectTopSongsRegion(region: String) {
+        if (region == _topSongsRegion.value) return
+        if (region !in _topSongsRegions.value && region != "ZZ") return
+        _topSongsRegion.value = region
+        loadTopSongsChart()
+    }
+
+    fun loadTopSongsChart() {
+        val region = _topSongsRegion.value
+        topSongsChartRequested = true
+        topSongsChartJob?.cancel()
+        _topSongsChart.value = UiState.Loading
+        topSongsChartJob = viewModelScope.launch { fetchTopSongsChart(region) }
+    }
+
+    private suspend fun fetchTopSongsChart(region: String) {
+        YtMusicRepository.topSongsChart(region).fold(
+            onSuccess = { chart ->
+                if (_topSongsRegion.value != region) return
+                _topSongsRegions.value = chart.availableRegions
+                _topSongsChart.value = UiState.Success(chart)
+            },
+            onFailure = { failure ->
+                if (_topSongsRegion.value != region) return
+                _topSongsChart.value = UiState.Error(failure.friendly())
+            },
+        )
+    }
+
+    private fun defaultTopSongsRegion(): String =
+        Locale.getDefault().country.uppercase(Locale.ROOT)
+            .takeIf { it.length == 2 }
+            ?: Innertube.currentRegion
 
     private suspend fun fetchExplore() {
         val state = YtMusicRepository.moodAndGenres().fold(
@@ -3460,21 +3512,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      *
      * One at a time with a beat between them: a burst of ratings is what
      * YouTube answers with a rate limit, and a like refused here stays
-     * unconfirmed in [LocalLikes] to be tried again the next time someone
-     * signs in rather than being lost.
+     * unconfirmed in [LocalLikes] to be tried again on the next sign-in or
+     * when the listener explicitly retries from the Library.
      */
-    private fun pushLocalLikes() {
+    fun syncLocalLikes(onComplete: (synced: Int, failed: Int) -> Unit = { _, _ -> }) {
+        if (!_signedIn.value || localLikesSyncJob?.isActive == true) return
         val pending = LocalLikes.pendingSongs()
-        if (pending.isEmpty()) return
-        viewModelScope.launch {
-            pending.forEach { like ->
-                YtMusicRepository.rate(like.videoId, LikeStatus.LIKE)
-                    .onSuccess { LocalLikes.markPushed(like.videoId) }
-                delay(400L)
+        if (pending.isEmpty()) {
+            onComplete(0, 0)
+            return
+        }
+        _localLikesSyncing.value = true
+        localLikesSyncJob = viewModelScope.launch {
+            var synced = 0
+            var failed = 0
+            try {
+                pending.forEachIndexed { index, like ->
+                    YtMusicRepository.rate(like.videoId, LikeStatus.LIKE)
+                        .onSuccess {
+                            LocalLikes.markPushed(like.videoId)
+                            synced++
+                        }
+                        .onFailure {
+                            Log.w("BitChord", "Could not sync local like ${like.videoId}: ${it.message}")
+                            failed++
+                        }
+                    if (index < pending.lastIndex) delay(400L)
+                }
+                libraryStale = true
+                onComplete(synced, failed)
+            } finally {
+                _localLikesSyncing.value = false
+                localLikesSyncJob = null
             }
-            libraryStale = true
         }
     }
+
+    private fun pushLocalLikes() = syncLocalLikes()
 
     /** Selects an identity without ever allowing a response to replace it. */
     fun selectProfile(accountId: String, selectedProfileId: String, supplied: YouTubeProfile? = null) {

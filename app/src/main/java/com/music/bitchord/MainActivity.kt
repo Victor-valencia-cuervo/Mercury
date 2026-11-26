@@ -859,6 +859,9 @@ private fun BitChordApp(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val exploreState by viewModel.explore.collectAsStateWithLifecycle()
+    val topSongsChart by viewModel.topSongsChart.collectAsStateWithLifecycle()
+    val topSongsRegion by viewModel.topSongsRegion.collectAsStateWithLifecycle()
+    val topSongsRegions by viewModel.topSongsRegions.collectAsStateWithLifecycle()
     val selectedMoodGenre by viewModel.selectedMoodGenre.collectAsStateWithLifecycle()
     val moodGenreShelves by viewModel.moodGenreShelves.collectAsStateWithLifecycle()
     val libraryState by viewModel.library.collectAsStateWithLifecycle()
@@ -1005,6 +1008,30 @@ private fun BitChordApp(
     // signed in — are a Library card of their own, kept current from the store
     // so a like made in the player puts the card on the page at once.
     val localLikeSongs by com.music.bitchord.data.LocalLikes.songs.collectAsStateWithLifecycle()
+    val homeFavoriteSongs = remember(libraryState, localLikeSongs) {
+        (
+            localLikeSongs +
+                (libraryState as? UiState.Success)?.data?.likedSongs.orEmpty()
+            )
+            .distinctBy { it.videoId }
+            .map { song ->
+                ShelfItem(
+                    title = song.title,
+                    subtitle = song.artist,
+                    thumbnailUrl = song.thumbnailUrl,
+                    videoId = song.videoId,
+                    browseId = null,
+                    isVideo = song.isVideo,
+                )
+            }
+    }
+    val homeFavoriteArtists = remember(libraryState) {
+        (libraryState as? UiState.Success)?.data?.shelves.orEmpty()
+            .flatMap { it.items }
+            .filter { it.browseId?.startsWith("UC") == true }
+            .distinctBy { it.browseId }
+    }
+    val localLikesSyncing by viewModel.localLikesSyncing.collectAsStateWithLifecycle()
     val localLikesTitle = stringResource(R.string.local_likes_title)
     val localLikesCountFormat = stringResource(R.string.local_likes_subtitle)
     val localLikesItem = remember(localLikeSongs, localLikesTitle, localLikesCountFormat) {
@@ -3406,6 +3433,9 @@ private fun BitChordApp(
                                 recentlyPlayedLoading = homeRecentlyPlayedLoading && !hideRecents,
                                 topPicks = topPicks,
                                 topPicksLoading = topPicksLoading,
+                                favoriteSongs = homeFavoriteSongs,
+                                favoriteArtists = homeFavoriteArtists,
+                                hideRecents = hideRecents,
                                 listenerName = account?.name,
                                 // Neither shelf is drawn without its callback.
                                 onTopPickClick = openTopPick.takeUnless { hideTopPicks },
@@ -3464,6 +3494,23 @@ private fun BitChordApp(
                                 listState = exploreListState,
                                 onCategoryClick = viewModel::openMoodGenre,
                                 onRetry = viewModel::loadExplore,
+                                topSongsState = topSongsChart,
+                                selectedChartRegion = topSongsRegion,
+                                availableChartRegions = topSongsRegions,
+                                onChartRegionSelected = viewModel::selectTopSongsRegion,
+                                onRetryTopSongs = viewModel::loadTopSongsChart,
+                                onTopSongClick = { songs, index, sourceTitle ->
+                                    val chart = (topSongsChart as? UiState.Success)?.data
+                                    playFrom(
+                                        songs,
+                                        index,
+                                        QueueSource(
+                                            sourceTitle,
+                                            PlaybackSourceType.EXPLORE,
+                                            chart?.playlistBrowseId,
+                                        ),
+                                    )
+                                },
                                 refreshing = MainViewModel.Feed.EXPLORE in refreshing,
                                 onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
                                 pullState = explorePull,
@@ -3663,6 +3710,25 @@ private fun BitChordApp(
                                 // does nothing; see [onBrowseLongPress].
                                 onShelfItemLongPress = onBrowseLongPress,
                                 onNewPlaylist = { creatingPlaylist = true },
+                                onSyncLocalLikes = if (signedIn && localLikeSongs.isNotEmpty()) {
+                                    {
+                                        viewModel.syncLocalLikes { synced, failed ->
+                                            val message = if (synced == 0 && failed == 0) {
+                                                context.getString(R.string.local_likes_sync_empty)
+                                            } else {
+                                                context.getString(
+                                                    R.string.local_likes_sync_summary,
+                                                    synced,
+                                                    failed,
+                                                )
+                                            }
+                                            showQueueNotice(
+                                                message,
+                                            )
+                                        }
+                                    }
+                                } else null,
+                                localLikesSyncing = localLikesSyncing,
                                 onImportSpotifyPlaylist = { showSpotifyImportDialog = true },
                                 onShowAll = { shelf -> navigator.push(AppRoute.LibraryShowAll(shelf)) },
                                 replay = {

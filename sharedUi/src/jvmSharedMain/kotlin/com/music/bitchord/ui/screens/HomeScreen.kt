@@ -71,6 +71,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.ShelfLayout
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.TopPick
+import com.music.bitchord.data.model.TopPickKind
 import com.music.bitchord.data.model.TopPickMood
 import com.music.bitchord.data.model.UiState
 import java.util.Locale
@@ -94,7 +95,6 @@ import com.music.bitchord.ui.player.MeshPalette
 /** How far the Listen now heading and feed sit above the shared top inset. */
 private val HOME_TITLE_LIFT = 28.dp
 
-private const val RECENTS_TITLE = "Recents"
 private const val RECENT_TRACKS_PER_COLUMN = 4
 
 private fun List<ShelfItem>.playingItemMatcher(song: Song?): (ShelfItem) -> Boolean {
@@ -146,6 +146,12 @@ fun HomeScreen(
      */
     topPicks: List<TopPick>? = null,
     topPicksLoading: Boolean = false,
+    /** YouTube Music and device likes, combined for the Home feed. */
+    favoriteSongs: List<ShelfItem> = emptyList(),
+    /** Saved artists from the listener's library. */
+    favoriteArtists: List<ShelfItem> = emptyList(),
+    /** Preserve the preference that hides listening history from Home. */
+    hideRecents: Boolean = false,
     /** The signed-in account's name, for the personal station's "Name's Station". */
     listenerName: String? = null,
     onTopPickClick: ((TopPick, String) -> Unit)? = null,
@@ -157,6 +163,65 @@ fun HomeScreen(
     /** Whether the Top Picks and mood artwork may animate — see [LocalArtworkMotion]. */
     artworkMotion: Boolean = true,
 ) {
+    val homeShelves = (state as? UiState.Success)?.data.orEmpty()
+    val quickAccessTitle = stringResource(Res.string.home_quick_access)
+    val favoritesTitle = stringResource(Res.string.home_favorites_now)
+    val continueTitle = stringResource(Res.string.home_continue_listening)
+    val releasesTitle = stringResource(Res.string.home_popular_releases)
+    val todayTitle = stringResource(Res.string.home_today_suggestions)
+    val artistsTitle = stringResource(Res.string.home_favorite_artists)
+    val similarTitle = stringResource(Res.string.home_similar_to_taste)
+    val popularArtistsTitle = stringResource(Res.string.home_popular_artists)
+    val videoTitle = stringResource(Res.string.home_recommended_videos)
+    val homeSections = remember(
+        homeShelves,
+        hideRecents,
+        continueTitle,
+        releasesTitle,
+        similarTitle,
+        popularArtistsTitle,
+        todayTitle,
+        videoTitle,
+    ) {
+        organizeHomeFeed(
+            shelves = homeShelves,
+            continueListeningTitle = continueTitle,
+            popularReleasesTitle = releasesTitle,
+            similarTitle = similarTitle,
+            popularArtistsTitle = popularArtistsTitle,
+            suggestionsTitle = todayTitle,
+            musicVideosTitle = videoTitle,
+        ).let { sections ->
+            if (hideRecents) sections.copy(continueListening = null) else sections
+        }
+    }
+    val quickAccessShelves = if (hideRecents) {
+        homeShelves.filterNot(HomeShelf::isContinueListeningShelf)
+    } else {
+        homeShelves
+    }
+    val quickAccessItems = remember(
+        homeShelves,
+        favoriteSongs,
+        homeSections.continueListening,
+        hideRecents,
+    ) {
+        buildList {
+            addAll(homeSections.continueListening?.items.orEmpty().take(3))
+            addAll(favoriteSongs.take(3))
+            addAll(quickAccessShelves.flatMap { it.items })
+        }.distinctBy { item ->
+            item.videoId?.let { "video:$it" } ?: item.browseId?.let { "browse:$it" } ?: item.title
+        }.take(6)
+    }
+    val latestReleasePicks = topPicks.orEmpty().filter { it.kind == TopPickKind.LATEST_RELEASE }
+    val similarPicks = topPicks.orEmpty().filter { it.kind == TopPickKind.ARTIST_AND_SIMILAR }
+    val featuredArtistPicks = topPicks.orEmpty().filter { it.kind == TopPickKind.FEATURED_ARTIST }
+    val todayPicks = topPicks.orEmpty().filter {
+        it.kind != TopPickKind.LATEST_RELEASE &&
+            it.kind != TopPickKind.ARTIST_AND_SIMILAR &&
+            it.kind != TopPickKind.FEATURED_ARTIST
+    }
     // Top Picks' pictures and motion wait for the feed — see LocalArtworkImages.
     val feedReady = state !is UiState.Loading
     CompositionLocalProvider(
@@ -190,6 +255,16 @@ fun HomeScreen(
             if (title != null) {
                 item { HomeTitle(greetingName) }
             }
+            if (quickAccessItems.isNotEmpty()) {
+                item(key = "home:quick-access") {
+                    HomeQuickAccessGrid(
+                        title = quickAccessTitle,
+                        items = quickAccessItems,
+                        onItemClick = onItemClick,
+                        onItemLongPress = onItemLongPress,
+                    )
+                }
+            }
             if (!signedIn && onSignIn != null) {
                 item {
                     // Read in this item, so a scroll starting or ending
@@ -201,21 +276,175 @@ fun HomeScreen(
                     )
                 }
             }
-            if (onTopPickClick != null) {
-                when {
-                    !topPicks.isNullOrEmpty() -> item(key = "top-picks") {
-                        TopPicksShelf(
-                            picks = topPicks,
-                            listenerName = listenerName,
-                            onClick = onTopPickClick,
-                            onLongPress = onTopPickLongPress,
-                        )
+            if (favoriteSongs.isNotEmpty()) {
+                item(key = "home:favorites") {
+                    HomeShelfContent(
+                        shelf = HomeShelf(favoritesTitle, favoriteSongs),
+                        sourceTitle = favoritesTitle,
+                        onItemClick = onItemClick,
+                        onItemLongPress = onItemLongPress,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                    )
+                }
+            }
+            homeSections.continueListening?.let { shelf ->
+                item(key = "home:continue-listening") {
+                    HomeShelfContent(
+                        shelf = shelf,
+                        sourceTitle = continueTitle,
+                        onItemClick = onItemClick,
+                        onItemLongPress = onItemLongPress,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                    )
+                }
+            }
+            if (homeSections.popularReleases != null || latestReleasePicks.isNotEmpty()) {
+                item(key = "home:popular-releases") {
+                    Column {
+                        SectionHeader(releasesTitle, homeSections.popularReleases?.subtitle.orEmpty())
+                        if (onTopPickClick != null && latestReleasePicks.isNotEmpty()) {
+                            TopPicksShelf(
+                                picks = latestReleasePicks,
+                                listenerName = listenerName,
+                                onClick = onTopPickClick,
+                                onLongPress = onTopPickLongPress,
+                                showHeader = false,
+                            )
+                        }
+                        homeSections.popularReleases?.let { shelf ->
+                            HomeShelfContent(
+                                shelf = shelf,
+                                sourceTitle = releasesTitle,
+                                onItemClick = onItemClick,
+                                onItemLongPress = onItemLongPress,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                showHeader = false,
+                            )
+                        }
                     }
-                    topPicks == null && topPicksLoading -> topPicksSkeleton()
+                }
+            }
+            val hasTodaySuggestions = homeSections.suggestions != null ||
+                (onTopPickClick != null && todayPicks.isNotEmpty()) ||
+                onMoodClick != null
+            if (hasTodaySuggestions) {
+                item(key = "home:today-suggestions") {
+                    Column {
+                        SectionHeader(todayTitle, homeSections.suggestions?.subtitle.orEmpty())
+                        if (onTopPickClick != null && todayPicks.isNotEmpty()) {
+                            TopPicksShelf(
+                                picks = todayPicks,
+                                listenerName = listenerName,
+                                onClick = onTopPickClick,
+                                onLongPress = onTopPickLongPress,
+                                showHeader = false,
+                            )
+                        }
+                        homeSections.suggestions?.let { shelf ->
+                            HomeShelfContent(
+                                shelf = shelf,
+                                sourceTitle = todayTitle,
+                                onItemClick = onItemClick,
+                                onItemLongPress = onItemLongPress,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                showHeader = false,
+                            )
+                        }
+                        if (onMoodClick != null) {
+                            FindYourMoodShelf(onMoodClick, onMoodsShowAll)
+                        }
+                    }
+                }
+            }
+            if (favoriteArtists.isNotEmpty() || (onTopPickClick != null && featuredArtistPicks.isNotEmpty())) {
+                item(key = "home:favorite-artists") {
+                    Column {
+                        SectionHeader(artistsTitle)
+                        if (onTopPickClick != null && featuredArtistPicks.isNotEmpty()) {
+                            TopPicksShelf(
+                                picks = featuredArtistPicks,
+                                listenerName = listenerName,
+                                onClick = onTopPickClick,
+                                onLongPress = onTopPickLongPress,
+                                showHeader = false,
+                            )
+                        }
+                        if (favoriteArtists.isNotEmpty()) {
+                            HomeShelfContent(
+                                shelf = HomeShelf(artistsTitle, favoriteArtists),
+                                sourceTitle = artistsTitle,
+                                onItemClick = onItemClick,
+                                onItemLongPress = onItemLongPress,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                showHeader = false,
+                            )
+                        }
+                    }
+                }
+            }
+            if (homeSections.similarToYourTaste != null ||
+                (onTopPickClick != null && similarPicks.isNotEmpty())
+            ) {
+                item(key = "home:similar-to-taste") {
+                    Column {
+                        SectionHeader(similarTitle, homeSections.similarToYourTaste?.subtitle.orEmpty())
+                        if (onTopPickClick != null && similarPicks.isNotEmpty()) {
+                            TopPicksShelf(
+                                picks = similarPicks,
+                                listenerName = listenerName,
+                                onClick = onTopPickClick,
+                                onLongPress = onTopPickLongPress,
+                                showHeader = false,
+                            )
+                        }
+                        homeSections.similarToYourTaste?.let { shelf ->
+                            HomeShelfContent(
+                                shelf = shelf,
+                                sourceTitle = similarTitle,
+                                onItemClick = onItemClick,
+                                onItemLongPress = onItemLongPress,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                showHeader = false,
+                            )
+                        }
+                    }
+                }
+            }
+            homeSections.popularArtists?.let { shelf ->
+                item(key = "home:popular-artists") {
+                    HomeShelfContent(
+                        shelf = shelf,
+                        sourceTitle = popularArtistsTitle,
+                        onItemClick = onItemClick,
+                        onItemLongPress = onItemLongPress,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                    )
+                }
+            }
+            homeSections.musicVideos?.let { shelf ->
+                item(key = "home:recommended-videos") {
+                    HomeShelfContent(
+                        shelf = shelf,
+                        sourceTitle = videoTitle,
+                        onItemClick = onItemClick,
+                        onItemLongPress = onItemLongPress,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                    )
                 }
             }
             when (state) {
                 is UiState.Loading -> {
+                    if (onTopPickClick != null && topPicks == null && topPicksLoading) {
+                        topPicksSkeleton(todayTitle)
+                    }
                     if (recentlyPlayedLoading) {
                         recentlyPlayedSkeleton()
                     }
@@ -228,15 +457,6 @@ fun HomeScreen(
                     if (recentlyPlayedLoading) {
                         recentlyPlayedSkeleton()
                     }
-                    itemsIndexedShelves(
-                        shelves = state.data,
-                        onMoodClick = onMoodClick,
-                        onMoodsShowAll = onMoodsShowAll,
-                        onItemClick = onItemClick,
-                        onItemLongPress = onItemLongPress,
-                        currentSong = currentSong,
-                        isPlaying = isPlaying,
-                    )
                     if (loadingMore) feedMoreSkeleton()
                 }
             }
@@ -266,45 +486,133 @@ fun HomeScreen(
     }
 }
 
-/** Recents mirrors the artist page's top-tracks pager; other shelves use square cards. */
-private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
-    shelves: List<HomeShelf>,
+@Composable
+private fun HomeShelfContent(
+    shelf: HomeShelf,
+    sourceTitle: String,
     onItemClick: (ShelfItem, String) -> Unit,
     onItemLongPress: ((ShelfItem) -> Unit)?,
     currentSong: Song?,
     isPlaying: Boolean,
-    onMoodClick: ((TopPickMood, String) -> Unit)? = null,
-    onMoodsShowAll: () -> Unit = {},
+    showHeader: Boolean = true,
 ) {
-    shelves.forEachIndexed { index, shelf ->
-        // Find Your Mood follows the lead shelf, as on Apple Music's Home.
-        if (index == 1 && onMoodClick != null) {
-            item(key = "find-your-mood") { FindYourMoodShelf(onMoodClick, onMoodsShowAll) }
-        }
-        item(key = shelf.title + index) {
-            val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
-            // Listen again and Quick picks are lists on the web player, as
-            // Recents is here: one pager for all three.
-            if (shelf.layout == ShelfLayout.LIST ||
-                (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true))
-            ) {
-                RecentShelf(
-                    shelf = shelf,
-                    onItemClick = openItem,
-                    onItemLongPress = onItemLongPress,
-                    currentSong = currentSong,
-                    isPlaying = isPlaying,
-                )
-            } else {
-                Shelf(
-                    shelf = shelf,
-                    onItemClick = openItem,
-                    onItemLongPress = onItemLongPress,
-                    currentSong = currentSong,
-                    isPlaying = isPlaying,
-                )
+    val click: (ShelfItem) -> Unit = { onItemClick(it, sourceTitle) }
+    if (shelf.layout == ShelfLayout.LIST) {
+        RecentShelf(
+            shelf = shelf,
+            onItemClick = click,
+            onItemLongPress = onItemLongPress,
+            currentSong = currentSong,
+            isPlaying = isPlaying,
+            showHeader = showHeader,
+        )
+    } else {
+        Shelf(
+            shelf = shelf,
+            onItemClick = click,
+            onItemLongPress = onItemLongPress,
+            currentSong = currentSong,
+            isPlaying = isPlaying,
+            showHeader = showHeader,
+        )
+    }
+}
+
+@Composable
+private fun HomeQuickAccessGrid(
+    title: String,
+    items: List<ShelfItem>,
+    onItemClick: (ShelfItem, String) -> Unit,
+    onItemLongPress: ((ShelfItem) -> Unit)?,
+) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        SectionHeader(title)
+        BoxWithConstraints(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PAGE_GUTTER),
+        ) {
+            val columns = when {
+                maxWidth >= 900.dp -> 4
+                maxWidth >= 620.dp -> 3
+                else -> 2
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.chunked(columns).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        rowItems.forEach { item ->
+                            HomeQuickAccessTile(
+                                item = item,
+                                onClick = { onItemClick(item, title) },
+                                onLongPress = onItemLongPress?.let { { it(item) } },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        repeat(columns - rowItems.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomeQuickAccessTile(
+    item: ShelfItem,
+    onClick: () -> Unit,
+    onLongPress: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier = modifier
+            .height(62.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+            .contextClick(onLongPress),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (item.thumbnailUrl.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.LibraryMusic,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            AsyncImage(
+                model = item.thumbnailUrl.artworkAt(ROW_ART_PX),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(shape)
+                    .thumbnailBorder(shape),
+            )
+        }
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp),
+        )
     }
 }
 
@@ -316,9 +624,12 @@ private fun RecentShelf(
     onItemLongPress: ((ShelfItem) -> Unit)?,
     currentSong: Song?,
     isPlaying: Boolean,
+    showHeader: Boolean = true,
 ) {
     Column(Modifier.padding(bottom = 26.dp)) {
-        RecentSectionHeader(title = localizeShelfTitle(shelf.title), subtitle = localizeShelfSubtitle(shelf.subtitle))
+        if (showHeader) {
+            RecentSectionHeader(title = localizeShelfTitle(shelf.title), subtitle = localizeShelfSubtitle(shelf.subtitle))
+        }
         val isCurrentItem = shelf.items.playingItemMatcher(currentSong)
         BoxWithConstraints {
             val columnWidth = trackColumnWidth(maxWidth)
@@ -711,9 +1022,10 @@ internal fun Shelf(
     leadingCard: (@Composable () -> Unit)? = null,
     currentSong: Song? = null,
     isPlaying: Boolean = false,
+    showHeader: Boolean = true,
 ) {
     Column(Modifier.padding(bottom = 26.dp)) {
-        SectionHeader(shelf.title, shelf.subtitle)
+        if (showHeader) SectionHeader(shelf.title, shelf.subtitle)
         val isCurrentItem = shelf.items.playingItemMatcher(currentSong)
         ShelfRow(
             contentPadding = PaddingValues(horizontal = PAGE_GUTTER),

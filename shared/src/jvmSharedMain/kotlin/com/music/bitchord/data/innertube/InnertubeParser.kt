@@ -252,6 +252,22 @@ object InnertubeParser {
         }
     }
 
+    fun parseTopSongsChartBrowseId(response: JsonObject): String? {
+        val playlists = parseTwoRowItemsDeep(response).asSequence()
+            .filter { it.browseId?.startsWith("VL") == true }
+            .toList()
+        return playlists.firstOrNull { "100" in it.title }?.browseId
+            ?: playlists.lastOrNull()?.browseId
+    }
+
+    fun parseChartRegionCodes(response: JsonObject): List<String> =
+        response.o("frameworkUpdates")
+            .o("entityBatchUpdate")
+            .a("mutations")
+            .orEmpty()
+            .mapNotNull { it.o("payload").o("musicFormBooleanChoice").s("opaqueToken") }
+            .distinct()
+
     /**
      * More Home shelves off a continuation response.
      *
